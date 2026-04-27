@@ -981,11 +981,8 @@ See `LICENSE` file for details.
 
 ## 👥 Team Grey Hats
 
-| Member | Role |
-|--------|------|
-| Addy | Project Lead · AI Developer · Backend |
-| Bhumika | Frontend · Dashboard · Web UI |
-| Suraj | Hardware · Demo Setup · Road Model |
+Build by Team Grey Hats for all
+Lead - Adarsh Arya
 
 ---
 
