@@ -31,6 +31,7 @@
       width: 100%;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(10px);
+      position: relative;
     }
     
     .logo {
@@ -327,12 +328,26 @@
 </head>
 <body>
   <div class="login-container">
+    <!-- Municipal corner button -->
+    <a href="#" id="municipalCornerBtn" onclick="switchToMunicipal(event)" style="
+      position:absolute;top:18px;right:20px;
+      font-size:0.75rem;color:#64748b;text-decoration:none;
+      display:flex;align-items:center;gap:5px;
+      padding:5px 10px;border:1px solid #1e293b;border-radius:20px;
+      transition:all 0.2s;background:rgba(30,41,59,0.4);
+    " onmouseover="this.style.color='#f1f5f9';this.style.borderColor='#3b82f6'"
+       onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      🏛️ Municipal Officer Login
+    </a>
+
     <div class="logo">
       <div class="logo-text">IRIS</div>
-      <div class="subtitle">🚗 Driver Biometric Portal</div>
+      <div class="subtitle" id="subtitleText">🚗 Driver Biometric Portal</div>
     </div>
     
-    <div class="status-box" id="statusBox">
+    <!-- Driver Login Section -->
+    <div id="driverSection">
+      <div class="status-box" id="statusBox">
       <div class="status-message">
         <div class="status-icon pending">⏱</div>
         <div class="status-text">Ready to scan face...</div>
@@ -545,6 +560,49 @@
     <div class="info-text">
       ✨ Biometric face recognition • No password needed<br>
       Point your face at camera for 2-3 seconds
+    </div>
+    </div>
+    
+    <!-- Officer Login Section -->
+    <div id="officerSection" style="display: none;">
+      <div class="status-box" id="officerStatusBox">
+        <div class="status-message">
+          <div class="status-icon pending">⏱</div>
+          <div class="status-text">Enter credentials...</div>
+        </div>
+      </div>
+      
+      <div class="enrollment-form show" id="officerLoginForm" style="display: block; margin-top: 0;">
+        <div class="form-group">
+          <label for="officerUsername">👤 Username</label>
+          <input type="text" id="officerUsername" placeholder="Enter username" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="officerPassword">🔐 Password</label>
+          <input type="password" id="officerPassword" placeholder="Enter password" required>
+        </div>
+        
+        <div class="button-group">
+          <button class="btn btn-primary" id="officerLoginBtn">🔓 Login</button>
+        </div>
+      </div>
+      
+      <div class="info-text">
+        Municipal Officer Portal<br>
+        Enter your credentials to access inspection data
+      </div>
+      <div style="text-align:center;margin-top:16px;">
+        <a href="#" onclick="switchToDriver();return false;" style="
+          font-size:0.8rem;color:#64748b;text-decoration:none;
+          display:inline-flex;align-items:center;gap:5px;
+          padding:6px 14px;border:1px solid #1e293b;border-radius:20px;
+          transition:all 0.2s;background:rgba(30,41,59,0.3);
+        " onmouseover="this.style.color='#f1f5f9';this.style.borderColor='#3b82f6'"
+           onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+          ← Back to Driver Login
+        </a>
+      </div>
     </div>
   </div>
   
@@ -856,6 +914,93 @@
     } else {
       console.log('DOM already loaded, waiting for Socket.IO connection...');
     }
+    
+    // Section switching — corner button approach
+    function switchToMunicipal(e) {
+      e.preventDefault();
+      document.getElementById('driverSection').style.display = 'none';
+      document.getElementById('officerSection').style.display = 'block';
+      document.getElementById('municipalCornerBtn').style.display = 'none';
+      document.getElementById('subtitleText').textContent = '🏛️ Municipal Officer Portal';
+      clearMessages();
+    }
+
+    function switchToDriver() {
+      document.getElementById('officerSection').style.display = 'none';
+      document.getElementById('driverSection').style.display = 'block';
+      document.getElementById('municipalCornerBtn').style.display = 'flex';
+      document.getElementById('subtitleText').textContent = '🚗 Driver Biometric Portal';
+      clearMessages();
+    }
+    
+    // Enter key triggers officer login
+    document.getElementById('officerPassword').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('officerLoginBtn').click();
+    });
+    document.getElementById('officerUsername').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('officerPassword').focus();
+    });
+
+    // Officer login handler
+    document.getElementById('officerLoginBtn').addEventListener('click', async () => {
+      const username = document.getElementById('officerUsername').value.trim();
+      const password = document.getElementById('officerPassword').value.trim();
+      const officerStatusBox = document.getElementById('officerStatusBox');
+      
+      if (!username || !password) {
+        officerStatusBox.innerHTML = `
+          <div class="status-message">
+            <div class="status-icon error">✕</div>
+            <div class="status-text">❌ Please enter both username and password</div>
+          </div>
+        `;
+        return;
+      }
+      
+      officerStatusBox.innerHTML = `
+        <div class="status-message">
+          <div class="status-icon pending">⏱</div>
+          <div class="status-text">Authenticating...</div>
+        </div>
+      `;
+      
+      try {
+        const response = await fetch('/login/municipal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'ok') {
+          officerStatusBox.innerHTML = `
+            <div class="status-message">
+              <div class="status-icon success">✓</div>
+              <div class="status-text">✓ Authentication successful!</div>
+            </div>
+          `;
+          setTimeout(() => {
+            window.location.href = data.redirect;
+          }, 1000);
+        } else {
+          officerStatusBox.innerHTML = `
+            <div class="status-message">
+              <div class="status-icon error">✕</div>
+              <div class="status-text">❌ Invalid credentials</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        console.error('Officer login error:', err);
+        officerStatusBox.innerHTML = `
+          <div class="status-message">
+            <div class="status-icon error">✕</div>
+            <div class="status-text">❌ Login failed: ${err.message}</div>
+          </div>
+        `;
+      }
+    });
   </script>
 </body>
 </html>

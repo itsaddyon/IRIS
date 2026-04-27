@@ -58,9 +58,27 @@ def is_municipal():
 def is_driver():
     return flask_session.get('role') == 'driver'
 
+def require_municipal():
+    """Return a 403 response if the caller is not a municipal officer."""
+    if not is_municipal():
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+    return None
+
+def require_driver():
+    """Return redirect if the caller is not an authenticated driver."""
+    if not is_driver() or not flask_session.get('driver_id'):
+        return redirect('/login')
+    return None
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 @app.route('/login')
 def login_page():
+    # If already authenticated, skip the login page
+    role = flask_session.get('role')
+    if role == 'driver' and flask_session.get('driver_id'):
+        return redirect('/live')
+    if role == 'municipal':
+        return redirect('/municipal')
     return render_template('login.html')
 
 @app.route('/login/municipal', methods=['POST'])
@@ -139,19 +157,12 @@ def hydrate_driver_session(driver_id, driver_name=None):
 # ── Pages ─────────────────────────────────────────────────────────────────────
 @app.route('/')
 def root():
-    # Always redirect unauthenticated users to login
-    if not flask_session.get('driver_id'):
-        return redirect('/login')
-    
-    # Redirect authenticated drivers to their dashboard
-    if flask_session.get('role') == 'driver':
-        return render_template('driver_dashboard.html')
-    
-    return render_template('dashboard.html')
-
-@app.route('/login')
-def login():
-    return render_template('login.html')
+    role = flask_session.get('role')
+    if role == 'driver' and flask_session.get('driver_id'):
+        return redirect('/live')
+    if role == 'municipal':
+        return redirect('/municipal')
+    return redirect('/login')
 
 @app.route('/dashboard')
 def dashboard():
@@ -159,33 +170,30 @@ def dashboard():
     query_driver_name = request.args.get('driver_name')
     if query_driver_id:
         hydrate_driver_session(query_driver_id, query_driver_name)
-
-    # Require authentication
-    if not flask_session.get('driver_id'):
-        return redirect('/login')
-    
-    if flask_session.get('role') == 'driver':
-        return render_template('driver_dashboard.html')
-    return render_template('dashboard.html')
+    return redirect('/live')
 
 @app.route('/live')
 def live_dashboard():
-    # Live monitoring dashboard for authenticated drivers
-    if flask_session.get('role') != 'driver' or not flask_session.get('driver_id'):
-        return redirect('/login')
-    return render_template('dashboard.html')
-
-@app.route('/driver')
-def driver_dashboard():
     query_driver_id = request.args.get('driver_id')
     query_driver_name = request.args.get('driver_name')
     if query_driver_id:
         hydrate_driver_session(query_driver_id, query_driver_name)
-
-    # Require authentication
     if not flask_session.get('driver_id'):
         return redirect('/login')
-    return render_template('driver_dashboard.html')
+    return render_template('dashboard.html',
+        driver_name=flask_session.get('driver_name', 'Driver'),
+        vehicle_id=flask_session.get('vehicle_id', ''),
+        driver_id=flask_session.get('driver_id', '')
+    )
+
+@app.route('/driver')
+def driver_dashboard():
+    # Legacy route — redirect to canonical /live
+    query_driver_id = request.args.get('driver_id')
+    query_driver_name = request.args.get('driver_name')
+    if query_driver_id:
+        hydrate_driver_session(query_driver_id, query_driver_name)
+    return redirect('/live')
 
 @app.route('/municipal')
 def municipal():
@@ -195,13 +203,14 @@ def municipal():
 
 @app.route('/road_vision')
 def road_vision():
-    if flask_session.get('role') not in ('driver', 'municipal'):
+    # Drivers only — municipal officers use the municipal portal
+    if not is_driver() or not flask_session.get('driver_id'):
         return redirect('/login')
     return render_template('road_vision.html')
 
 @app.route('/mobile')
 def mobile():
-    if flask_session.get('role') not in ('driver', 'municipal'):
+    if not is_driver() or not flask_session.get('driver_id'):
         return redirect('/login')
     return render_template('mobile.html')
 
@@ -249,10 +258,14 @@ def api_session_status():
 
 @app.route('/api/sessions')
 def api_sessions():
+    err = require_municipal()
+    if err: return err
     return jsonify(get_all_sessions())
 
 @app.route('/api/session/<session_id>/detections')
 def api_session_detections(session_id):
+    if flask_session.get('role') not in ('driver', 'municipal'):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
     return jsonify(get_session_detections(session_id))
 
 # ── Detection API ─────────────────────────────────────────────────────────────
@@ -298,23 +311,33 @@ def api_vehicles():
 
 @app.route('/api/approved_detections')
 def api_approved():
+    err = require_municipal()
+    if err: return err
     return jsonify(get_approved_detections())
 
 @app.route('/api/declined_detections')
 def api_declined():
+    err = require_municipal()
+    if err: return err
     return jsonify(get_declined_detections())
 
 @app.route('/api/approved_map')
 def api_approved_map():
+    err = require_municipal()
+    if err: return err
     return jsonify([d for d in get_approved_detections() if d.get('location')])
 
 @app.route('/api/approve/<int:did>', methods=['POST'])
 def api_approve(did):
+    err = require_municipal()
+    if err: return err
     approve_detection(did)
     return jsonify({'status': 'approved', 'id': did})
 
 @app.route('/api/decline/<int:did>', methods=['POST'])
 def api_decline(did):
+    err = require_municipal()
+    if err: return err
     decline_detection(did)
     return jsonify({'status': 'declined', 'id': did})
 
@@ -322,6 +345,8 @@ def api_decline(did):
 # ── File serving ──────────────────────────────────────────────────────────────
 @app.route('/snapshot/<path:filename>')
 def snapshot(filename):
+    if flask_session.get('role') not in ('driver', 'municipal'):
+        return abort(403)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p = os.path.join(root, config.SNAPSHOTS_DIR, filename)
     if os.path.exists(p):
@@ -330,7 +355,8 @@ def snapshot(filename):
 
 @app.route('/generate_report')
 def generate_report_route():
-    # Import from web.report (correct path)
+    if not is_municipal():
+        return redirect('/login')
     from web.report import generate_report as _gen
     detections = get_approved_detections()
     if not detections:
@@ -470,19 +496,33 @@ def on_capture_face(data, callback=None):
         print("[BIOMETRIC] Detecting faces...")
         face_locations = face_recognition.face_locations(rgb_frame, model='hog')
         print(f"[BIOMETRIC] Faces detected: {len(face_locations)}")
-        
+
         if not face_locations:
             print("[BIOMETRIC] ❌ No face detected in frame")
-            return send_response({'success': False, 'error': 'No face detected. Please ensure your face is clearly visible.'})
-        
-        # Generate face encoding
-        print("[BIOMETRIC] Generating face encoding...")
-        face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+            return send_response({'success': False, 'error': 'No face detected. Ensure your face is clearly visible and well lit.'})
+
+        # ── Face quality gate: reject tiny/distant faces ──────────────────────
+        # face_locations returns (top, right, bottom, left)
+        top, right, bottom, left = face_locations[0]
+        face_h = bottom - top
+        face_w = right - left
+        frame_h, frame_w = rgb_frame.shape[:2]
+        face_area_pct = (face_h * face_w) / (frame_h * frame_w) * 100
+        print(f"[BIOMETRIC] Face size: {face_w}×{face_h}px  ({face_area_pct:.1f}% of frame)")
+        if face_area_pct < 3.0:
+            return send_response({'success': False,
+                'error': 'Face too small or far from camera. Move closer and centre your face.'})
+
+        # ── Generate encoding with num_jitters=5 for stability ────────────────
+        # num_jitters > 1 averages multiple jittered versions of the face crop,
+        # producing a much more consistent 128-d vector across frames.
+        print("[BIOMETRIC] Generating face encoding (jitters=5)...")
+        face_encodings = face_recognition.face_encodings(
+            rgb_frame, face_locations, num_jitters=5)
         if not face_encodings:
             print("[BIOMETRIC] ❌ Face encoding failed")
-            return send_response({'success': False, 'error': 'Face found, but encoding failed. Try better lighting.'})
-        
-        # Return first face encoding
+            return send_response({'success': False, 'error': 'Face found but encoding failed. Try better lighting.'})
+
         encoding = face_encodings[0].astype(float).tolist()
         print(f"[BIOMETRIC] ✓ Face encoding generated successfully")
         return send_response({'success': True, 'encoding': encoding})

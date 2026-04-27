@@ -96,56 +96,77 @@ class BiometricAuth:
         cap.release()
         return None
     
-    def recognize_driver(self, face_encoding: np.ndarray, 
-                        tolerance: float = 0.6) -> Optional[Dict]:
+    def recognize_driver(self, face_encoding: np.ndarray,
+                        tolerance: float = 0.38) -> Optional[Dict]:
         """
-        Recognize driver by comparing face encoding against database
-        
-        Args:
-            face_encoding: Face encoding from capture
-            tolerance: Match sensitivity (0-1, lower = stricter)
-        
+        Recognize driver by comparing face encoding against database.
+
+        Stricter than vanilla face_recognition:
+          • Hard distance ceiling of `tolerance` (default 0.38, tighter than the
+            library default of 0.6 and our previous 0.4).
+          • Requires confidence ≥ 67 % (distance ≤ 0.33) when only one driver is
+            enrolled — prevents the "only person in DB always wins" false-positive.
+          • When multiple drivers are enrolled, requires the best distance to be
+            meaningfully better than the second-best (gap ≥ 0.06) so a borderline
+            match near a second candidate is rejected.
+
         Returns:
             {"driver_id": int, "name": str, "confidence": float} or None
         """
         if len(self.known_face_encodings) == 0:
             print("[BIOMETRIC] No enrolled drivers in database")
             return None
-        
-        # Compare with all known faces
-        distances = face_recognition.compare_faces(
-            self.known_face_encodings,
-            face_encoding,
-            tolerance=tolerance
-        )
-        
+
         face_distances = face_recognition.face_distance(
             self.known_face_encodings,
             face_encoding
         )
-        
+
         if len(face_distances) == 0:
             return None
-        
-        # Find best match
-        best_match_index = np.argmin(face_distances)
-        best_distance = face_distances[best_match_index]
-        
-        # Check if it's a good match
-        if distances[best_match_index]:
-            driver_id, name = self.known_face_ids[best_match_index]
-            confidence = 1 - best_distance
-            
-            print(f"[BIOMETRIC] ✓ Recognized: {name} (Confidence: {confidence:.1%})")
-            
-            return {
-                "driver_id": driver_id,
-                "name": name,
-                "confidence": confidence
-            }
-        
-        print(f"[BIOMETRIC] ❌ No match found (best distance: {best_distance:.3f})")
-        return None
+
+        best_idx      = int(np.argmin(face_distances))
+        best_distance = float(face_distances[best_idx])
+        confidence    = 1.0 - best_distance
+
+        print(f"[BIOMETRIC] Best distance: {best_distance:.4f}  "
+              f"Confidence: {confidence:.1%}  Tolerance: {tolerance}")
+
+        # ── Primary gate: hard distance ceiling ───────────────────────────────
+        if best_distance >= tolerance:
+            print(f"[BIOMETRIC] ❌ Rejected — distance {best_distance:.4f} ≥ {tolerance}")
+            return None
+
+        # ── Single-driver stricter gate ────────────────────────────────────────
+        # When only 1 person is enrolled, argmin always picks them.
+        # Require a much higher confidence to avoid false positives.
+        if len(self.known_face_encodings) == 1:
+            required = 0.33   # confidence must be > 67 %
+            if best_distance > required:
+                print(f"[BIOMETRIC] ❌ Rejected (single-driver gate) — "
+                      f"distance {best_distance:.4f} > {required}")
+                return None
+
+        # ── Multi-driver separation gate ──────────────────────────────────────
+        # If there are multiple drivers, make sure this person is clearly
+        # different from the runner-up (avoid ambiguous matches).
+        elif len(face_distances) > 1:
+            sorted_dists = np.sort(face_distances)
+            gap = float(sorted_dists[1] - sorted_dists[0])
+            if gap < 0.06:
+                print(f"[BIOMETRIC] ❌ Rejected — ambiguous match "
+                      f"(gap {gap:.4f} < 0.06 between top-2 candidates)")
+                return None
+
+        driver_id, name = self.known_face_ids[best_idx]
+        print(f"[BIOMETRIC] ✓ Recognised: {name}  "
+              f"(distance={best_distance:.4f}, confidence={confidence:.1%})")
+
+        return {
+            "driver_id": driver_id,
+            "name":      name,
+            "confidence": confidence,
+        }
     
     def enroll_new_driver(self, name: str, vehicles: List[str], 
                          routes: List[str], face_encoding: np.ndarray) -> Optional[int]:
