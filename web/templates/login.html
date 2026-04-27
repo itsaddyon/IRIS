@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRIS Biometric Login - Driver Portal</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .login-container {
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+    
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .logo-text {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      text-align: center;
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-top: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .face-capture-section {
+      margin: 30px 0;
+    }
+    
+    .camera-box {
+      position: relative;
+      background: #111827;
+      border: 2px dashed #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    
+    .camera-placeholder {
+      color: #64748b;
+    }
+    
+    .camera-icon {
+      font-size: 3rem;
+      margin-bottom: 10px;
+    }
+    
+    .camera-text {
+      font-size: 0.9rem;
+    }
+    
+    #webcam-stream {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 8px;
+      background: #000;
+    }
+    
+    .camera-box {
+      position: relative;
+      background: #111827;
+      border: 2px dashed #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    
+    .face-guide-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 220px;
+      height: 290px;
+      opacity: 0.8;
+      pointer-events: none;
+      z-index: 10;
+      filter: drop-shadow(0 0 30px rgba(59, 130, 246, 0.9)) drop-shadow(0 0 60px rgba(96, 165, 250, 0.5));
+      animation: scan-pulse 3s ease-in-out infinite;
+    }
+    
+    @keyframes scan-pulse {
+      0%, 100% {
+        opacity: 0.6;
+        filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.7)) drop-shadow(0 0 40px rgba(96, 165, 250, 0.3));
+      }
+      50% {
+        opacity: 0.95;
+        filter: drop-shadow(0 0 40px rgba(59, 130, 246, 1)) drop-shadow(0 0 80px rgba(96, 165, 250, 0.7));
+      }
+    }
+    
+    .face-guide-overlay svg {
+      width: 100%;
+      height: 100%;
+      filter: drop-shadow(0 0 12px rgba(59, 130, 246, 1));
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      letter-spacing: 0.5px;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+      border: 1px solid #3b82f6;
+    }
+    
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.2);
+    }
+    
+    .status-box {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    
+    .status-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .status-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+    }
+    
+    .status-icon.pending {
+      background: #eab308;
+      color: #000;
+    }
+    
+    .status-icon.success {
+      background: #22c55e;
+      color: #fff;
+    }
+    
+    .status-icon.error {
+      background: #ef4444;
+      color: #fff;
+    }
+    
+    .status-text {
+      color: #64748b;
+    }
+    
+    .enrollment-form {
+      display: none;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    
+    .enrollment-form.show {
+      display: block;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      background: #111827;
+      color: #f1f5f9;
+      font-size: 0.9rem;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    .vehicle-selector,
+    .route-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      background: #0a0e1a;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    
+    .checkbox-item input[type="checkbox"] {
+      width: auto;
+      cursor: pointer;
+    }
+    
+    .error-message {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 0.85rem;
+    }
+    
+    .success-message {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid #22c55e;
+      color: #86efac;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 0.85rem;
+    }
+    
+    .info-text {
+      color: #64748b;
+      font-size: 0.85rem;
+      text-align: center;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">
+      <div class="logo-text">IRIS</div>
+      <div class="subtitle">🚗 Driver Biometric Portal</div>
+    </div>
+    
+    <div class="status-box" id="statusBox">
+      <div class="status-message">
+        <div class="status-icon pending">⏱</div>
+        <div class="status-text">Ready to scan face...</div>
+      </div>
+    </div>
+    
+    <div class="face-capture-section">
+      <div class="camera-box" id="cameraBox">
+        <!-- Holographic face guide overlay -->
+        <div class="face-guide-overlay">
+          <svg viewBox="0 0 240 320" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <!-- Gradient for depth -->
+              <linearGradient id="faceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.9"/>
+                <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.7"/>
+              </linearGradient>
+              
+              <!-- Glow filter -->
+              <filter id="neon-glow">
+                <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+              
+              <!-- Outer scan frame animation -->
+              <style>
+                @keyframes scan-line {
+                  0%, 100% { transform: translateY(-100%); opacity: 0; }
+                  50% { opacity: 1; }
+                  100% { transform: translateY(300px); opacity: 0; }
+                }
+                .scan-line {
+                  animation: scan-line 3s ease-in-out infinite;
+                  transform-origin: 50% 0;
+                }
+              </style>
+            </defs>
+            
+            <!-- Outer scanning frame -->
+            <g stroke="#3b82f6" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="6,4">
+              <rect x="30" y="10" width="180" height="250" rx="15"/>
+            </g>
+            
+            <!-- Corner focus points -->
+            <g stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
+              <!-- Top-left -->
+              <line x1="35" y1="15" x2="55" y2="15"/>
+              <line x1="35" y1="15" x2="35" y2="35"/>
+              <!-- Top-right -->
+              <line x1="205" y1="15" x2="185" y2="15"/>
+              <line x1="205" y1="15" x2="205" y2="35"/>
+              <!-- Bottom-left -->
+              <line x1="35" y1="255" x2="55" y2="255"/>
+              <line x1="35" y1="255" x2="35" y2="235"/>
+              <!-- Bottom-right -->
+              <line x1="205" y1="255" x2="185" y2="255"/>
+              <line x1="205" y1="255" x2="205" y2="235"/>
+            </g>
+            
+            <!-- Main face outline with gradient -->
+            <path d="M 95 50 Q 75 75 75 110 Q 70 150 85 185 Q 105 210 120 215 Q 135 210 155 185 Q 170 150 165 110 Q 165 75 145 50 Q 135 40 120 38 Q 105 40 95 50" 
+                  stroke="url(#faceGrad)" stroke-width="2" fill="none" filter="url(#neon-glow)" opacity="0.95"/>
+            
+            <!-- Face mesh - forehead detail -->
+            <g stroke="#60a5fa" stroke-width="0.8" fill="none" opacity="0.4">
+              <path d="M 85 55 Q 120 50 155 55"/>
+              <path d="M 80 70 Q 120 65 160 70"/>
+              <path d="M 78 85 Q 120 82 162 85"/>
+              <line x1="90" y1="55" x2="95" y2="85" opacity="0.5"/>
+              <line x1="120" y1="50" x2="120" y2="85" opacity="0.5"/>
+              <line x1="150" y1="55" x2="145" y2="85" opacity="0.5"/>
+            </g>
+            
+            <!-- Eyes with advanced detail -->
+            <g filter="url(#neon-glow)">
+              <!-- Left Eye -->
+              <g>
+                <ellipse cx="95" cy="80" rx="16" ry="22" stroke="#60a5fa" stroke-width="1.5" fill="none" opacity="0.8"/>
+                <circle cx="95" cy="80" r="9" stroke="#60a5fa" stroke-width="0.8" fill="none" opacity="0.6"/>
+                <circle cx="95" cy="80" r="5" fill="#3b82f6" opacity="0.7"/>
+                <circle cx="96" cy="79" r="2" fill="#60a5fa" opacity="0.9"/>
+                <!-- Eye mesh -->
+                <line x1="80" y1="80" x2="110" y2="80" stroke="#3b82f6" stroke-width="0.5" opacity="0.3"/>
+                <line x1="95" y1="60" x2="95" y2="100" stroke="#3b82f6" stroke-width="0.5" opacity="0.3"/>
+              </g>
+              
+              <!-- Right Eye -->
+              <g>
+                <ellipse cx="145" cy="80" rx="16" ry="22" stroke="#60a5fa" stroke-width="1.5" fill="none" opacity="0.8"/>
+                <circle cx="145" cy="80" r="9" stroke="#60a5fa" stroke-width="0.8" fill="none" opacity="0.6"/>
+                <circle cx="145" cy="80" r="5" fill="#3b82f6" opacity="0.7"/>
+                <circle cx="144" cy="79" r="2" fill="#60a5fa" opacity="0.9"/>
+                <!-- Eye mesh -->
+                <line x1="130" y1="80" x2="160" y2="80" stroke="#3b82f6" stroke-width="0.5" opacity="0.3"/>
+                <line x1="145" y1="60" x2="145" y2="100" stroke="#3b82f6" stroke-width="0.5" opacity="0.3"/>
+              </g>
+            </g>
+            
+            <!-- Nose with 3D effect -->
+            <g stroke="#60a5fa" stroke-width="1" fill="none" opacity="0.7" filter="url(#neon-glow)">
+              <path d="M 120 80 L 120 125"/>
+              <line x1="115" y1="120" x2="125" y2="120"/>
+              <circle cx="115" cy="123" r="2.5" fill="#3b82f6" opacity="0.6"/>
+              <circle cx="125" cy="123" r="2.5" fill="#3b82f6" opacity="0.6"/>
+            </g>
+            
+            <!-- Mouth with curves -->
+            <g stroke="#60a5fa" stroke-width="1" fill="none" opacity="0.6" filter="url(#neon-glow)">
+              <path d="M 95 160 Q 120 175 145 160" stroke-width="1.2"/>
+              <line x1="95" y1="160" x2="95" y2="165" opacity="0.4" stroke-width="0.8"/>
+              <line x1="145" y1="160" x2="145" y2="165" opacity="0.4" stroke-width="0.8"/>
+            </g>
+            
+            <!-- Cheekbone mesh patterns -->
+            <g stroke="#3b82f6" stroke-width="0.7" fill="none" opacity="0.35">
+              <!-- Left cheek -->
+              <path d="M 75 95 Q 80 110 78 130"/>
+              <path d="M 72 105 Q 78 120 77 140"/>
+              <path d="M 75 95 L 85 100"/>
+              <path d="M 75 110 L 85 115"/>
+              <path d="M 75 125 L 85 130"/>
+              
+              <!-- Right cheek -->
+              <path d="M 165 95 Q 160 110 162 130"/>
+              <path d="M 168 105 Q 162 120 163 140"/>
+              <path d="M 165 95 L 155 100"/>
+              <path d="M 165 110 L 155 115"/>
+              <path d="M 165 125 L 155 130"/>
+            </g>
+            
+            <!-- Chin detail -->
+            <g stroke="#3b82f6" stroke-width="0.8" fill="none" opacity="0.4">
+              <path d="M 105 195 Q 120 205 135 195"/>
+              <line x1="110" y1="190" x2="130" y2="190" opacity="0.5"/>
+              <line x1="108" y1="200" x2="132" y2="200" opacity="0.4"/>
+            </g>
+            
+            <!-- Subtle face shading grid -->
+            <g stroke="#3b82f6" stroke-width="0.6" fill="none" opacity="0.2">
+              <line x1="90" y1="100" x2="95" y2="140"/>
+              <line x1="100" y1="95" x2="105" y2="145"/>
+              <line x1="135" y1="95" x2="140" y2="145"/>
+              <line x1="150" y1="100" x2="145" y2="140"/>
+              <line x1="92" y1="120" x2="148" y2="120"/>
+            </g>
+            
+            <!-- Scanning line animation (top to bottom) -->
+            <g class="scan-line" opacity="0.3">
+              <line x1="45" y1="0" x2="195" y2="0" stroke="#60a5fa" stroke-width="2" filter="url(#neon-glow)"/>
+            </g>
+            
+            <!-- Data points indicators (subtle) -->
+            <g fill="#60a5fa" opacity="0.4">
+              <circle cx="75" cy="90" r="1.5"/>
+              <circle cx="165" cy="90" r="1.5"/>
+              <circle cx="80" cy="160" r="1.5"/>
+              <circle cx="160" cy="160" r="1.5"/>
+              <circle cx="120" cy="50" r="1.5"/>
+            </g>
+            
+            <!-- Center alignment crosshair -->
+            <g stroke="#3b82f6" stroke-width="0.8" opacity="0.3">
+              <line x1="120" y1="220" x2="120" y2="240"/>
+              <line x1="110" y1="230" x2="130" y2="230"/>
+              <circle cx="120" cy="230" r="8" fill="none" stroke-width="0.6"/>
+            </g>
+          </svg>
+        </div>
+        
+        <!-- Live video feed -->
+        <video id="webcam-stream" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>
+      </div>
+      
+      <div class="button-group">
+        <button class="btn btn-primary" id="captureBtn">🎥 Scan Face</button>
+        <button class="btn btn-secondary" id="resetBtn">Reset</button>
+      </div>
+    </div>
+    
+    <div class="enrollment-form" id="enrollmentForm">
+      <h3 style="margin-bottom: 15px; color: #e2e8f0;">📝 Enroll New Driver</h3>
+      
+      <div class="form-group">
+        <label for="driverName">Driver Name</label>
+        <input type="text" id="driverName" placeholder="Enter full name" required>
+      </div>
+      
+      <div class="form-group">
+        <label>🚗 Assign Vehicles</label>
+        <div class="vehicle-selector" id="vehicleSelector"></div>
+      </div>
+      
+      <div class="form-group">
+        <label>📍 Assign Routes</label>
+        <div class="route-selector" id="routeSelector"></div>
+      </div>
+      
+      <div class="button-group">
+        <button class="btn btn-primary" id="completeEnrollBtn">✓ Complete Enrollment</button>
+        <button class="btn btn-secondary" id="cancelEnrollBtn">Cancel</button>
+      </div>
+    </div>
+    
+    <div id="errorMessage" style="display: none;"></div>
+    <div id="successMessage" style="display: none;"></div>
+    
+    <div class="info-text">
+      ✨ Biometric face recognition • No password needed<br>
+      Point your face at camera for 2-3 seconds
+    </div>
+  </div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    const socket = io();
+    
+    // Socket.IO connection debugging
+    socket.on('connect', () => {
+      console.log('✓ Socket.IO connected:', socket.id);
+      updateStatus('✓ Connected', 'success');
+      // Now it's safe to initialize
+      loadVehiclesAndRoutes();
+      setupEventListeners();
+      initWebcam();
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('❌ Socket.IO disconnected');
+      updateStatus('❌ Connection lost', 'error');
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('Socket.IO error:', error);
+      updateStatus(`❌ Connection error: ${error.message}`, 'error');
+    });
+    
+    let currentFaceEncoding = null;
+    let isCapturing = false;
+    let isProcessing = false;  // Flag to prevent multiple captures during redirect
+    let webcamStream = null;
+    let videoElement = null;
+    let canvas = null;
+    let canvasContext = null;
+    
+    const captureBtn = document.getElementById('captureBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const enrollmentForm = document.getElementById('enrollmentForm');
+    const completeEnrollBtn = document.getElementById('completeEnrollBtn');
+    const cancelEnrollBtn = document.getElementById('cancelEnrollBtn');
+    const statusBox = document.getElementById('statusBox');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    const vehicleSelector = document.getElementById('vehicleSelector');
+    const routeSelector = document.getElementById('routeSelector');
+    
+    async function initWebcam() {
+      try {
+        videoElement = document.getElementById('webcam-stream');
+        canvas = document.createElement('canvas');
+        canvasContext = canvas.getContext('2d');
+        
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' },
+          audio: false
+        });
+        
+        videoElement.srcObject = webcamStream;
+        updateStatus('✓ Webcam ready', 'success');
+      } catch (err) {
+        console.error('Webcam error:', err);
+        updateStatus(`❌ Camera access denied: ${err.message}`, 'error');
+        showError('Please allow camera access to use biometric login');
+      }
+    }
+    
+    function captureFrame() {
+      if (!videoElement || !canvas || !canvasContext) {
+        console.error('Canvas not initialized');
+        return null;
+      }
+      
+      // Check if video has loaded
+      if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+        console.error('Video not ready - dimensions are 0');
+        return null;
+      }
+      
+      try {
+        // Use smaller resolution for faster processing (max 480px height)
+        let width = videoElement.videoWidth;
+        let height = videoElement.videoHeight;
+        
+        if (height > 480) {
+          const scale = 480 / height;
+          width = Math.floor(width * scale);
+          height = 480;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        canvasContext.drawImage(videoElement, 0, 0, width, height);
+        
+        // Lower quality (0.6) for faster transmission and processing
+        const frameData = canvas.toDataURL('image/jpeg', 0.6);
+        console.log(`Frame captured: ${width}x${height}, size: ${(frameData.length / 1024).toFixed(1)}KB`);
+        return frameData;
+      } catch (err) {
+        console.error('Canvas capture error:', err);
+        return null;
+      }
+    }
+    
+    function setupEventListeners() {
+      captureBtn.addEventListener('click', captureFace);
+      resetBtn.addEventListener('click', resetForm);
+      completeEnrollBtn.addEventListener('click', completeEnrollment);
+      cancelEnrollBtn.addEventListener('click', cancelEnrollment);
+      console.log('Event listeners configured');
+    }
+    
+    function loadVehiclesAndRoutes() {
+      fetch('/api/vehicles-and-routes')
+        .then(r => r.json())
+        .then(data => {
+          data.vehicles.forEach(v => {
+            const label = document.createElement('label');
+            label.className = 'checkbox-item';
+            label.innerHTML = `
+              <input type="checkbox" name="vehicle" value="${v.id}">
+              <span>${v.name}</span>
+            `;
+            vehicleSelector.appendChild(label);
+          });
+          
+          data.routes.forEach(r => {
+            const label = document.createElement('label');
+            label.className = 'checkbox-item';
+            label.innerHTML = `
+              <input type="checkbox" name="route" value="${r}">
+              <span>${r}</span>
+            `;
+            routeSelector.appendChild(label);
+          });
+        })
+        .catch(err => console.error('Error loading vehicles/routes:', err));
+    }
+    
+    function captureFace() {
+      if (isCapturing || isProcessing) return;  // Prevent multiple simultaneous captures
+      isCapturing = true;
+      captureBtn.disabled = true;
+      updateStatus('⏳ Capturing face...', 'pending');
+      
+      console.log('Starting face capture...');
+      
+      // Capture frame from webcam
+      const frameData = captureFrame();
+      if (!frameData) {
+        console.error('Frame capture returned null');
+        updateStatus('❌ Camera not ready. Try again in 1 second.', 'error');
+        isCapturing = false;
+        captureBtn.disabled = false;
+        return;
+      }
+      
+      // Set timeout to prevent hanging
+      const timeoutId = setTimeout(() => {
+        console.error('Socket timeout - server not responding');
+        updateStatus('❌ Server timeout. Please try again.', 'error');
+        isCapturing = false;
+        captureBtn.disabled = false;
+      }, 10000); // 10 second timeout
+      
+      // Send frame to backend for face detection and encoding
+      console.log('Sending frame to backend...');
+      socket.emit('biometric:capture_face', { frame: frameData }, (response) => {
+        clearTimeout(timeoutId);
+        
+        console.log('Backend response:', response);
+        isCapturing = false;
+        
+        if (response && response.success) {
+          currentFaceEncoding = response.encoding;
+          updateStatus('✓ Face captured!', 'success');
+          console.log('Face encoding received, attempting recognition...');
+          
+          // Mark as processing to prevent multiple recognition attempts
+          isProcessing = true;
+          
+          // Try to recognize the driver
+          socket.emit('biometric:recognize', { encoding: currentFaceEncoding }, (recResult) => {
+            console.log('Recognition result:', recResult);
+            if (recResult && recResult.success && recResult.driver) {
+              updateStatus(`✓ Welcome, ${recResult.driver.name}!`, 'success');
+              console.log('Recognition successful, redirecting to dashboard...');
+              captureBtn.disabled = true;
+              resetBtn.disabled = true;
+              setTimeout(() => {
+                redirectToDashboard(recResult.driver);
+              }, 1500);
+            } else {
+              updateStatus('👤 New driver detected. Complete enrollment.', 'pending');
+              isProcessing = false;  // Allow enrollment to proceed
+              showEnrollmentForm();
+            }
+          });
+        } else {
+          const errorMsg = response ? (response.error || 'Failed to capture face') : 'No response from server';
+          console.error('Capture failed:', errorMsg);
+          updateStatus('❌ ' + errorMsg, 'error');
+          isProcessing = false;
+          captureBtn.disabled = false;
+        }
+      });
+    }
+    
+    function showEnrollmentForm() {
+      enrollmentForm.classList.add('show');
+    }
+    
+    function completeEnrollment() {
+      const name = document.getElementById('driverName').value.trim();
+      const vehicles = Array.from(document.querySelectorAll('input[name="vehicle"]:checked')).map(e => e.value);
+      const routes = Array.from(document.querySelectorAll('input[name="route"]:checked')).map(e => e.value);
+      
+      if (!name) {
+        showError('Please enter driver name');
+        return;
+      }
+      
+      if (vehicles.length === 0 || routes.length === 0) {
+        showError('Please select at least one vehicle and one route');
+        return;
+      }
+      
+      updateStatus('📝 Enrolling...', 'pending');
+      
+      socket.emit('biometric:enroll_driver', {
+        name: name,
+        vehicles: vehicles,
+        routes: routes,
+        face_encoding: currentFaceEncoding
+      }, (response) => {
+        if (response.success) {
+          showSuccess(`✓ Welcome, ${name}! Enrolled successfully.`);
+          setTimeout(() => {
+            redirectToDashboard({ driver_id: response.driver_id, name: response.driver_name || name });
+          }, 1500);
+        } else {
+          showError('Enrollment failed: ' + (response.error || 'Unknown error'));
+        }
+      });
+    }
+    
+    function cancelEnrollment() {
+      enrollmentForm.classList.remove('show');
+      resetForm();
+    }
+    
+    function resetForm() {
+      currentFaceEncoding = null;
+      document.getElementById('driverName').value = '';
+      document.querySelectorAll('input[name="vehicle"]').forEach(e => e.checked = false);
+      document.querySelectorAll('input[name="route"]').forEach(e => e.checked = false);
+      enrollmentForm.classList.remove('show');
+      captureBtn.disabled = false;
+      resetBtn.disabled = false;
+      isCapturing = false;
+      isProcessing = false;
+      updateStatus('Ready to scan face...', 'pending');
+      clearMessages();
+    }
+    
+    function redirectToDashboard(driver) {
+      const driverId = driver?.driver_id || driver;
+      const driverName = driver?.name || '';
+      const target = `/dashboard?driver_id=${encodeURIComponent(driverId)}${driverName ? `&driver_name=${encodeURIComponent(driverName)}` : ''}`;
+      console.log('Redirecting to dashboard for driver:', driverId, driverName);
+      window.location.href = target;
+    }
+    
+    function updateStatus(message, type) {
+      let icon = '⏱';
+      if (type === 'success') icon = '✓';
+      if (type === 'error') icon = '✕';
+      
+      statusBox.innerHTML = `
+        <div class="status-message">
+          <div class="status-icon ${type}">${icon}</div>
+          <div class="status-text">${message}</div>
+        </div>
+      `;
+    }
+    
+    function showError(message) {
+      errorMessage.innerHTML = `<strong>❌ Error:</strong> ${message}`;
+      errorMessage.classList.add('error-message');
+      errorMessage.style.display = 'block';
+      setTimeout(() => { errorMessage.style.display = 'none'; }, 4000);
+    }
+    
+    function showSuccess(message) {
+      successMessage.innerHTML = `<strong>✓ Success:</strong> ${message}`;
+      successMessage.classList.add('success-message');
+      successMessage.style.display = 'block';
+    }
+    
+    function clearMessages() {
+      errorMessage.style.display = 'none';
+      successMessage.style.display = 'none';
+    }
+    
+    // Wait for DOMContentLoaded before initializing
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, waiting for Socket.IO connection...');
+      });
+    } else {
+      console.log('DOM already loaded, waiting for Socket.IO connection...');
+    }
+  </script>
+</body>
+</html>

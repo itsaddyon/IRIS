@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>IRIS – Field Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#0a0e1a;--card:#111827;--card2:#1a2233;--border:#1e293b;
+      --text:#f1f5f9;--sub:#64748b;--accent:#3b82f6;
+      --red:#ef4444;--orange:#f97316;--green:#22c55e;--yellow:#eab308;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+    /* ── Header ── */
+    header{
+      background:var(--card);border-bottom:1px solid var(--border);
+      padding:12px 24px;display:flex;align-items:center;justify-content:space-between;
+    }
+    .logo{display:flex;align-items:center;gap:10px;}
+    .logo-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;
+      display:flex;align-items:center;justify-content:center;font-size:1rem;}
+    .logo-text{font-size:1.1rem;font-weight:700;letter-spacing:1px;}
+    .logo-text span{color:var(--accent);}
+    .header-right{display:flex;align-items:center;gap:12px;}
+    .clock{font-size:0.85rem;color:var(--sub);font-family:monospace;}
+    .conn-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:6px;}
+    .conn-dot.live{background:var(--green);}
+    .conn-label{font-size:0.78rem;color:var(--sub);}
+
+    /* ── Layout ── */
+    .page{display:grid;grid-template-columns:1fr 340px;gap:0;height:calc(100vh - 57px);}
+    .main{padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;height:100%;min-height:0;}
+    .main::-webkit-scrollbar{width:4px;}
+    .main::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px;}
+    .sidebar{background:var(--card);border-left:1px solid var(--border);
+             padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;height:100%;min-height:0;}
+    .sidebar::-webkit-scrollbar{width:4px;}
+    .sidebar::-webkit-scrollbar-thumb{background:#1e293b;border-radius:4px;}
+
+    /* ── Session control ── */
+    .session-box{background:var(--card2);border:1px solid var(--border);
+                 border-radius:12px;padding:16px;}
+    .session-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+    .session-title{font-size:0.78rem;text-transform:uppercase;letter-spacing:1px;color:var(--sub);}
+    .session-id{font-size:0.75rem;color:var(--accent);font-family:monospace;}
+    .session-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+    .inp{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+         padding:8px 10px;color:var(--text);font-size:0.82rem;width:100%;}
+    .inp:focus{outline:none;border-color:var(--accent);}
+    .session-btns{display:flex;gap:8px;}
+    .btn-start{flex:1;padding:10px;background:var(--green);color:#fff;border:none;
+               border-radius:8px;font-weight:700;font-size:0.88rem;cursor:pointer;}
+    .btn-end{flex:1;padding:10px;background:var(--red);color:#fff;border:none;
+             border-radius:8px;font-weight:700;font-size:0.88rem;cursor:pointer;display:none;}
+    .btn-start:hover{background:#16a34a;} .btn-end:hover{background:#dc2626;}
+    .session-timer{text-align:center;font-size:1.8rem;font-weight:700;
+                   color:var(--accent);font-family:monospace;margin:8px 0;display:none;}
+
+    /* ── Stats ── */
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+    .stat{background:var(--card2);border:1px solid var(--border);border-radius:10px;
+          padding:12px;text-align:center;}
+    .stat .val{font-size:1.8rem;font-weight:700;}
+    .stat .lbl{font-size:0.7rem;color:var(--sub);margin-top:2px;text-transform:uppercase;}
+    .val.blue{color:var(--accent);} .val.red{color:var(--red);}
+    .val.orange{color:var(--orange);} .val.green{color:var(--green);}
+
+    /* ── Video feed ── */
+    .feed-wrap{position:relative;background:#000;border-radius:12px;overflow:hidden;
+               border:1px solid var(--border);aspect-ratio:16/9;}
+    .feed-wrap img{width:100%;height:100%;object-fit:cover;}
+    .feed-overlay{position:absolute;top:10px;left:10px;display:flex;gap:6px;}
+    .feed-badge{padding:3px 10px;border-radius:20px;font-size:0.72rem;font-weight:600;}
+    .feed-badge.rec{background:#ef444488;border:1px solid var(--red);color:#fca5a5;}
+    .feed-badge.idle{background:#1e293b;border:1px solid var(--border);color:var(--sub);}
+    .feed-placeholder{width:100%;height:100%;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;color:var(--sub);gap:8px;min-height:200px;}
+    .feed-placeholder .icon{font-size:2.5rem;opacity:0.3;}
+
+    /* ── Alert bar ── */
+    .alert-bar{display:none;background:#ef444422;border:1px solid var(--red);
+               border-radius:8px;padding:10px 16px;color:#fca5a5;font-size:0.85rem;
+               animation:pulse 1s ease-in-out infinite alternate;}
+    @keyframes pulse{from{opacity:0.7;}to{opacity:1;}}
+
+    /* ── Charts ── */
+    .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .chart-box{background:var(--card2);border:1px solid var(--border);
+               border-radius:10px;padding:14px;}
+    .chart-title{font-size:0.75rem;text-transform:uppercase;color:var(--sub);
+                 letter-spacing:1px;margin-bottom:10px;}
+
+    /* ── Sidebar detection feed ── */
+    .sidebar-title{font-size:0.75rem;text-transform:uppercase;color:var(--sub);
+                   letter-spacing:1px;margin-bottom:8px;display:flex;
+                   justify-content:space-between;align-items:center;}
+    .det-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;}
+    .det-list::-webkit-scrollbar{width:3px;}
+    .det-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+    .det-item{background:var(--card2);border:1px solid var(--border);border-radius:8px;
+              padding:10px;display:flex;gap:10px;align-items:center;}
+    .det-item.High{border-left:3px solid var(--red);}
+    .det-item.Medium{border-left:3px solid var(--orange);}
+    .det-item.Low{border-left:3px solid var(--green);}
+    .det-badge{padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;flex-shrink:0;}
+    .det-badge.High{background:#ef444420;color:var(--red);}
+    .det-badge.Medium{background:#f9731620;color:var(--orange);}
+    .det-badge.Low{background:#22c55e20;color:var(--green);}
+    .det-info{flex:1;min-width:0;}
+    .det-ts{font-size:0.7rem;color:var(--sub);}
+    .det-conf{font-size:0.78rem;font-weight:600;}
+    .det-loc{font-size:0.65rem;color:var(--accent);font-family:monospace;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    /* ── Virtual LED Panel ── */
+    .led-panel{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;}
+    .led-panel-title{font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--sub);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+    .led-row{display:flex;gap:20px;align-items:center;justify-content:center;}
+    .led-item{display:flex;flex-direction:column;align-items:center;gap:8px;}
+    .led{width:36px;height:36px;border-radius:50%;border:3px solid #1e293b;
+         transition:all 0.15s;position:relative;cursor:default;}
+    .led.off{background:#1a2233;box-shadow:none;}
+    .led.on-blue  {background:#3b82f6;box-shadow:0 0 18px 6px #3b82f688;border-color:#2563eb;}
+    .led.on-yellow{background:#eab308;box-shadow:0 0 18px 6px #eab30888;border-color:#ca8a04;}
+    .led.on-red   {background:#ef4444;box-shadow:0 0 18px 6px #ef444488;border-color:#dc2626;}
+    .led-label{font-size:0.7rem;color:var(--sub);text-align:center;}
+
+    /* ── RC Car Model ── */
+    .car-model{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;}
+    .car-model-title{font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--sub);margin-bottom:12px;}
+    .car-scene{display:flex;gap:16px;align-items:flex-start;}
+    .car-svg-wrap{flex-shrink:0;}
+    .car-info{flex:1;display:flex;flex-direction:column;gap:8px;}
+    .car-stat-row{display:flex;justify-content:space-between;font-size:0.78rem;padding:6px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border);}
+    .car-stat-label{color:var(--sub);}
+    .car-stat-val{font-weight:600;font-family:monospace;}
+    .buzzer-icon{font-size:1.4rem;display:inline-block;}
+    .buzzer-icon.buzz{animation:buzzAnim 0.2s ease-in-out 4;}
+    @keyframes buzzAnim{0%,100%{transform:scale(1) rotate(0deg)}25%{transform:scale(1.4) rotate(-15deg)}75%{transform:scale(1.4) rotate(15deg)}}
+    .nav-btn{padding:6px 14px;background:transparent;border:1px solid var(--border);
+             color:var(--sub);border-radius:6px;font-size:0.78rem;cursor:pointer;}
+    .nav-btn:hover{border-color:var(--accent);color:var(--text);}
+    .empty-feed{color:var(--sub);font-size:0.8rem;text-align:center;padding:20px 0;}
+
+    /* ── Car Dashboard Warning Overlay ─────────── */
+
+    #warning-overlay {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      pointer-events: none;
+      /* NOT full-screen — anchored bottom-right */
+    }
+    #warning-overlay.active { display: block; }
+
+    /* Full-screen edge flash only — behind everything else */
+    #warning-flash {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      animation: none;
+    }
+    @keyframes flashRed {
+      0%,100% { background: transparent; }
+      20%      { background: rgba(255,30,30,0.14); }
+      40%      { background: transparent; }
+      60%      { background: rgba(255,30,30,0.10); }
+      80%      { background: transparent; }
+    }
+    @keyframes flashOrange {
+      0%,100% { background: transparent; }
+      25%      { background: rgba(255,120,0,0.10); }
+      75%      { background: transparent; }
+    }
+    .flash-active-high   { animation: flashRed    0.8s ease-in-out 3 !important; }
+    .flash-active-medium { animation: flashOrange 1.0s ease-in-out 2 !important; }
+
+    /* Warning card — compact corner widget */
+    #warning-card {
+      position: relative;
+      background: linear-gradient(160deg, #0a0000 0%, #1c0000 60%, #0d0000 100%);
+      border: 1.5px solid #ff0000;
+      border-radius: 14px;
+      padding: 16px 22px 14px;
+      text-align: center;
+      box-shadow:
+        0 0 0 1px rgba(255,0,0,0.25),
+        0 0 24px rgba(255,0,0,0.5),
+        0 0 60px rgba(255,0,0,0.2);
+      width: 280px;
+      pointer-events: all;
+      cursor: pointer;
+      animation: slideIn 0.25s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(40px); opacity: 0; }
+      to   { transform: translateX(0);   opacity: 1; }
+    }
+    #warning-card.medium {
+      background: linear-gradient(160deg, #080400 0%, #1a0d00 60%, #0d0800 100%);
+      border-color: #ff8800;
+      box-shadow: 0 0 0 1px rgba(255,136,0,0.25), 0 0 24px rgba(255,136,0,0.45), 0 0 50px rgba(255,136,0,0.15);
+    }
+    #warning-card.low {
+      background: linear-gradient(160deg, #000a04 0%, #001a0d 60%, #000d06 100%);
+      border-color: #00cc66;
+      box-shadow: 0 0 0 1px rgba(0,204,102,0.25), 0 0 20px rgba(0,204,102,0.35);
+    }
+
+    /* Scanline */
+    #warning-card::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: 12px;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+      pointer-events: none;
+    }
+
+    .w-icon {
+      font-size: 2rem; line-height: 1;
+      margin-bottom: 4px; display: block;
+      filter: drop-shadow(0 0 8px currentColor);
+    }
+    .w-icon.high   { color: #ff2222; animation: iconPulse 0.5s ease-in-out infinite alternate; }
+    .w-icon.medium { color: #ff8800; animation: iconPulse 0.7s ease-in-out infinite alternate; }
+    .w-icon.low    { color: #00cc66; animation: iconPulse 1.0s ease-in-out infinite alternate; }
+    @keyframes iconPulse {
+      from { transform: scale(1);    filter: drop-shadow(0 0 6px currentColor); }
+      to   { transform: scale(1.15); filter: drop-shadow(0 0 16px currentColor); }
+    }
+
+    .w-tag {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.52rem; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      margin-bottom: 4px; opacity: 0.7;
+    }
+    .w-tag.high   { color: #ff4444; }
+    .w-tag.medium { color: #ff9900; }
+    .w-tag.low    { color: #00cc66; }
+
+    .w-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.1rem; font-weight: 900;
+      letter-spacing: 1px; line-height: 1.15;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .w-title.high   { color: #ff1111; text-shadow: 0 0 14px rgba(255,0,0,0.9); animation: textGlitch 2s ease-in-out infinite; }
+    .w-title.medium { color: #ff8800; text-shadow: 0 0 12px rgba(255,136,0,0.8); }
+    .w-title.low    { color: #00cc66; text-shadow: 0 0 10px rgba(0,204,102,0.7); }
+    @keyframes textGlitch {
+      0%,95%,100% { transform: translateX(0); opacity: 1; }
+      96%          { transform: translateX(-2px); opacity: 0.9; }
+      97%          { transform: translateX(2px); opacity: 0.8; }
+      98%          { transform: translateX(-1px); opacity: 1; }
+    }
+
+    .w-sub {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.58rem; letter-spacing: 1px; opacity: 0.8;
+      margin-bottom: 6px;
+    }
+    .w-conf {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6rem; opacity: 0.5; letter-spacing: 0.5px;
+    }
+
+    /* Bottom scan bar */
+    #warning-card::after {
+      content: ''; position: absolute;
+      left: 0; right: 0; bottom: 0; height: 2px;
+      border-radius: 0 0 12px 12px;
+      background: linear-gradient(90deg, transparent, #ff0000, transparent);
+      animation: barScan 1.5s linear infinite;
+    }
+    #warning-card.medium::after { background: linear-gradient(90deg, transparent, #ff8800, transparent); }
+    #warning-card.low::after    { background: linear-gradient(90deg, transparent, #00cc66, transparent); animation: none; opacity: 0.5; }
+    @keyframes barScan { 0%{opacity:0.3} 50%{opacity:1} 100%{opacity:0.3} }
+
+    /* Corner brackets */
+    .w-corner { position:absolute; width:10px; height:10px; border-color:#ff2222; border-style:solid; opacity:0.7; }
+    .w-corner.tl { top:6px; left:6px; border-width:1.5px 0 0 1.5px; }
+    .w-corner.tr { top:6px; right:6px; border-width:1.5px 1.5px 0 0; }
+    .w-corner.bl { bottom:6px; left:6px; border-width:0 0 1.5px 1.5px; }
+    .w-corner.br { bottom:6px; right:6px; border-width:0 1.5px 1.5px 0; }
+    #warning-card.medium .w-corner { border-color:#ff8800; }
+    #warning-card.low    .w-corner { border-color:#00cc66; }
+  </style>
+</head>
+<body>
+<!-- ── Car Dashboard Warning Overlay ──────────────── -->
+<div id="warning-overlay">
+  <div id="warning-flash" class="flash-high"></div>
+  <div id="warning-card">
+    <div class="w-corner tl"></div>
+    <div class="w-corner tr"></div>
+    <div class="w-corner bl"></div>
+    <div class="w-corner br"></div>
+    <span class="w-icon high" id="w-icon">⚠</span>
+    <div class="w-tag high" id="w-tag">Road Hazard Detected</div>
+    <div class="w-title high" id="w-title">HIGH POTHOLE<br/>AHEAD</div>
+    <div class="w-sub" id="w-sub" style="color:#ff4444">⚠ REDUCE SPEED IMMEDIATELY ⚠</div>
+    <div class="w-conf" id="w-conf">Confidence: —%</div>
+  </div>
+</div>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🚧</div>
+    <div class="logo-text"><span>IRIS</span> Field Dashboard</div>
+  </div>
+  <div class="header-right">
+    <span><span class="conn-dot" id="conn-dot"></span><span class="conn-label" id="conn-label">Connecting…</span></span>
+    <span class="clock" id="clock"></span>
+    <button class="nav-btn" onclick="location.href='/road_vision'" style="color:#00e5a0;border-color:#00e5a040">🎥 Road Vision 3D</button>
+    <button class="nav-btn" onclick="location.href='/municipal'">🏛 Municipal Portal →</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="main">
+    <!-- Alert bar -->
+    <div class="alert-bar" id="alert-bar">⚠ HIGH SEVERITY POTHOLE DETECTED!</div>
+
+    <!-- Session control -->
+    <div class="session-box">
+      <div class="session-header">
+        <span class="session-title">Inspection Session</span>
+        <span class="session-id" id="session-id-label">No active session</span>
+      </div>
+      <div class="session-inputs" id="session-inputs">
+        <select class="inp" id="vehicle-id">
+          <option value="">Loading vehicles…</option>
+        </select>
+        <input class="inp" id="route" placeholder="Route (e.g. NH-44 Agra)" value="City Route"/>
+      </div>
+      <div class="session-timer" id="session-timer">00:00:00</div>
+      <div class="session-btns">
+        <button class="btn-start" id="btn-start" onclick="startSession()">▶ Start Inspection</button>
+        <button class="btn-end"  id="btn-end"   onclick="endSession()">⏹ End & Upload</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat"><div class="val blue" id="s-total">0</div><div class="lbl">Total</div></div>
+      <div class="stat"><div class="val red"    id="s-high">0</div><div class="lbl">High</div></div>
+      <div class="stat"><div class="val orange" id="s-med">0</div><div class="lbl">Medium</div></div>
+      <div class="stat"><div class="val green"  id="s-low">0</div><div class="lbl">Low</div></div>
+    </div>
+
+    <!-- Virtual LED Panel + RC Car Model -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+      <!-- LED Panel -->
+      <div class="led-panel">
+        <div class="led-panel-title">
+          💡 Hardware Indicator LEDs
+          <span style="font-size:0.7rem;color:var(--accent)" id="arduino-status">● Simulated</span>
+        </div>
+        <div class="led-row">
+          <div class="led-item">
+            <div class="led off" id="led-green"></div>
+            <div class="led-label">LOW<br/>Severity</div>
+          </div>
+          <div class="led-item">
+            <div style="font-size:1.6rem" class="buzzer-icon" id="buzzer-icon">🔔</div>
+            <div class="led-label">Buzzer</div>
+          </div>
+          <div class="led-item">
+            <div class="led off" id="led-orange"></div>
+            <div class="led-label">MEDIUM<br/>Severity</div>
+          </div>
+          <div class="led-item">
+            <div class="led off" id="led-red"></div>
+            <div class="led-label">HIGH<br/>Severity</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RC Car Model -->
+      <div class="car-model">
+        <div class="car-model-title">🚗 RC Inspection Vehicle</div>
+        <div class="car-scene">
+          <div class="car-svg-wrap">
+            <svg width="90" height="80" viewBox="0 0 90 80" xmlns="http://www.w3.org/2000/svg">
+              <!-- Car body -->
+              <rect x="10" y="30" width="70" height="28" rx="8" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1.5"/>
+              <!-- Roof -->
+              <rect x="22" y="16" width="46" height="18" rx="6" fill="#1a2233" stroke="#3b82f6" stroke-width="1.5"/>
+              <!-- Windows -->
+              <rect x="26" y="19" width="16" height="12" rx="2" fill="#0ea5e9" opacity="0.6"/>
+              <rect x="46" y="19" width="16" height="12" rx="2" fill="#0ea5e9" opacity="0.6"/>
+              <!-- Wheels -->
+              <circle cx="24" cy="58" r="10" fill="#111827" stroke="#64748b" stroke-width="2"/>
+              <circle cx="24" cy="58" r="5" fill="#1e293b"/>
+              <circle cx="66" cy="58" r="10" fill="#111827" stroke="#64748b" stroke-width="2"/>
+              <circle cx="66" cy="58" r="5" fill="#1e293b"/>
+              <!-- Camera on top -->
+              <rect x="38" y="8" width="14" height="10" rx="3" fill="#374151" stroke="#6b7280" stroke-width="1"/>
+              <circle cx="45" cy="13" r="3" fill="#0ea5e9" id="cam-lens"/>
+              <line x1="45" y1="16" x2="45" y2="18" stroke="#6b7280" stroke-width="1.5"/>
+              <!-- LED dots on car -->
+              <circle cx="18" cy="36" r="4" id="car-led-g" fill="#1a2233" stroke="#3b82f6" stroke-width="1.5"/>
+              <circle cx="45" cy="36" r="4" id="car-led-o" fill="#1a2233" stroke="#eab308" stroke-width="1.5"/>
+              <circle cx="72" cy="36" r="4" id="car-led-r" fill="#1a2233" stroke="#ef4444" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <div class="car-info">
+            <div class="car-stat-row"><span class="car-stat-label">Camera</span><span class="car-stat-val" style="color:#22c55e">● Active</span></div>
+            <div class="car-stat-row"><span class="car-stat-label">Last Detection</span><span class="car-stat-val" id="car-last-sev">—</span></div>
+            <div class="car-stat-row"><span class="car-stat-label">Session Potholes</span><span class="car-stat-val" id="car-total">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live feed -->
+    <div class="feed-wrap">
+      <div class="feed-placeholder" id="feed-ph">
+        <div class="icon">📷</div>
+        <div>Camera feed will appear here</div>
+      </div>
+      <img id="video-feed" src="/video_feed" style="display:none"
+           onload="this.style.display='block';document.getElementById('feed-ph').style.display='none';"
+           onerror="this.style.display='none';document.getElementById('feed-ph').style.display='flex';"/>
+      <div class="feed-overlay">
+        <span class="feed-badge idle" id="rec-badge">● IDLE</span>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">Detections Over Time</div>
+        <canvas id="lineChart" height="120"></canvas>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Severity Distribution</div>
+        <canvas id="doughChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-title">
+      Live Detection Feed
+      <span style="color:var(--accent);font-size:0.75rem" id="det-count">0</span>
+    </div>
+    <div class="det-list" id="det-list">
+      <div class="empty-feed">No detections yet. Start a session to begin.</div>
+    </div>
+  </div>
+</div>
+<script>
+const socket = io();
+let total=0,high=0,med=0,low=0,detIdx=0;
+let timerInterval=null, sessionActive=false, elapsedSec=0;
+const tLabels=[], tData=[];
+let fleetCache=[];
+
+// Clock
+setInterval(()=>{
+  const n=new Date();
+  document.getElementById('clock').textContent=
+    n.toLocaleDateString('en-IN')+' '+n.toLocaleTimeString('en-IN');
+},1000);
+
+// Connection
+socket.on('connect',()=>{
+  document.getElementById('conn-dot').className='conn-dot live';
+  document.getElementById('conn-label').textContent='Live';
+});
+socket.on('disconnect',()=>{
+  document.getElementById('conn-dot').className='conn-dot';
+  document.getElementById('conn-label').textContent='Disconnected';
+});
+
+// Charts
+const lCtx=document.getElementById('lineChart').getContext('2d');
+const lineChart=new Chart(lCtx,{type:'line',
+  data:{labels:tLabels,datasets:[{label:'Detections',data:tData,
+    borderColor:'#3b82f6',backgroundColor:'#3b82f622',tension:0.3,fill:true,pointRadius:2}]},
+  options:{scales:{x:{ticks:{color:'#64748b'},grid:{color:'#1e293b'}},
+    y:{ticks:{color:'#64748b',stepSize:1},grid:{color:'#1e293b'},beginAtZero:true}},
+    plugins:{legend:{labels:{color:'#f1f5f9'}}}}});
+
+const dCtx=document.getElementById('doughChart').getContext('2d');
+const doughChart=new Chart(dCtx,{type:'doughnut',
+  data:{labels:['High','Medium','Low'],
+    datasets:[{data:[0,0,0],backgroundColor:['#ef4444','#f97316','#22c55e'],
+      borderColor:'#111827',borderWidth:3}]},
+  options:{cutout:'65%',plugins:{legend:{labels:{color:'#f1f5f9'}}}}});
+
+// Timer
+function fmtTime(s){
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return [h,m,sec].map(x=>String(x).padStart(2,'0')).join(':');
+}
+
+// Load vehicle fleet + auto-select if driver is logged in
+async function loadFleet(){
+  const [fleetRes, meRes] = await Promise.all([
+    fetch('/api/vehicles'),
+    fetch('/api/me')
+  ]);
+  const fleet = await fleetRes.json();
+  fleetCache = fleet;
+  const me    = await meRes.json();
+  const sel   = document.getElementById('vehicle-id');
+  sel.innerHTML = fleet.map(v=>
+    `<option value="${v.vehicle_id}">${v.icon} ${v.vehicle_id} — ${v.name}</option>`
+  ).join('');
+  // Auto-select driver's vehicle from session
+  if(me.vehicle_id){
+    sel.value = me.vehicle_id;
+    sel.disabled = true; // driver can only use their own vehicle
+  }
+  sel.addEventListener('change',()=>{
+    const v=fleet.find(x=>x.vehicle_id===sel.value);
+    if(v) document.getElementById('route').value=v.last_route||v.route;
+  });
+  if(fleet.length>0){
+    const selected=fleet.find(v=>v.vehicle_id===sel.value)||fleet[0];
+    document.getElementById('route').value=selected.last_route||selected.route;
+  }
+}
+
+function getVehicleMeta(vehicleId){
+  return fleetCache.find(v=>v.vehicle_id===vehicleId) || {icon:'🚗',name:vehicleId,color:'#3b82f6',route:'City Route',last_route:'City Route'};
+}
+
+function setSessionUIActive(session){
+  const veh=getVehicleMeta(session.vehicle_id);
+  sessionActive=true;
+  elapsedSec=session.elapsed||0;
+  clearInterval(timerInterval);
+  document.getElementById('session-inputs').style.display='none';
+  document.getElementById('session-timer').style.display='block';
+  document.getElementById('session-timer').textContent=fmtTime(elapsedSec);
+  document.getElementById('btn-start').style.display='none';
+  document.getElementById('btn-end').style.display='block';
+  document.getElementById('rec-badge').textContent='● REC';
+  document.getElementById('rec-badge').className='feed-badge rec';
+  document.getElementById('session-id-label').innerHTML=
+    `<span style="color:${veh.color}">${veh.icon} ${session.vehicle_id}</span> · Session: ${session.session_id}`;
+  document.getElementById('vehicle-id').value=session.vehicle_id||'';
+  document.getElementById('route').value=session.route||veh.last_route||veh.route||'City Route';
+  timerInterval=setInterval(()=>{
+    elapsedSec++;
+    document.getElementById('session-timer').textContent=fmtTime(elapsedSec);
+  },1000);
+}
+
+function setSessionUIInactive(labelText='No active session'){
+  sessionActive=false;
+  clearInterval(timerInterval);
+  timerInterval=null;
+  elapsedSec=0;
+  document.getElementById('session-id-label').textContent=labelText;
+  document.getElementById('session-timer').style.display='none';
+  document.getElementById('session-timer').textContent='00:00:00';
+  document.getElementById('session-inputs').style.display='grid';
+  document.getElementById('btn-start').style.display='block';
+  document.getElementById('btn-end').style.display='none';
+  document.getElementById('rec-badge').textContent='● IDLE';
+  document.getElementById('rec-badge').className='feed-badge idle';
+}
+
+function resetSessionVisuals(message='No detections yet. Start a session to begin.'){
+  total=high=med=low=detIdx=0;
+  tLabels.length=0;
+  tData.length=0;
+  updateStats();
+  lineChart.update();
+  document.getElementById('car-last-sev').textContent='—';
+  document.getElementById('car-last-sev').style.color='#f1f5f9';
+  document.getElementById('car-total').textContent='0';
+  document.getElementById('det-count').textContent='0';
+  document.getElementById('det-list').innerHTML=`<div class="empty-feed">${message}</div>`;
+}
+
+function renderDetection(data, historical=false){
+  total++;
+  const sev=data.severity;
+  if(sev==='High') high++;
+  else if(sev==='Medium') med++;
+  else low++;
+  updateStats();
+
+  if(!historical){
+    triggerLED(sev);
+    showWarning(sev, data.confidence, data.location);
+  }
+
+  const sevColors={'High':'#ef4444','Medium':'#f97316','Low':'#22c55e'};
+  document.getElementById('car-last-sev').textContent=sev;
+  document.getElementById('car-last-sev').style.color=sevColors[sev]||'#f1f5f9';
+  document.getElementById('car-total').textContent=total;
+
+  if(sev==='High' && !historical){
+    const bar=document.getElementById('alert-bar');
+    bar.style.display='block';
+    bar.innerHTML=`⚠ HIGH SEVERITY POTHOLE — Confidence: ${(data.confidence*100).toFixed(1)}%`
+      +(data.location?` | 📍 ${data.location}`:'');
+    setTimeout(()=>bar.style.display='none',5000);
+  }
+
+  const lbl=(data.timestamp||'').slice(11,19) || new Date().toLocaleTimeString('en-IN');
+  tLabels.push(lbl);
+  tData.push(1);
+  if(tLabels.length>30){tLabels.shift();tData.shift();}
+  lineChart.update();
+
+  detIdx++;
+  const list=document.getElementById('det-list');
+  if(list.querySelector('.empty-feed')) list.innerHTML='';
+  document.getElementById('det-count').textContent=detIdx;
+  const item=document.createElement('div');
+  item.className=`det-item ${sev}`;
+  item.innerHTML=`<span class="det-badge ${sev}">${sev}</span>
+    <div class="det-info">
+      <div class="det-conf">${(data.confidence*100).toFixed(1)}% confidence</div>
+      <div class="det-ts">${data.timestamp}</div>
+      ${data.location?`<div class="det-loc">📍 ${data.location}</div>`:''}
+    </div>`;
+  list.insertBefore(item,list.firstChild);
+  if(list.children.length>50) list.removeChild(list.lastChild);
+}
+
+async function restoreCurrentSession(){
+  const status=await fetch('/api/session/status').then(r=>r.json());
+  if(!status.active){
+    setSessionUIInactive('No active session');
+    resetSessionVisuals();
+    return;
+  }
+
+  setSessionUIActive(status);
+  resetSessionVisuals('Restoring live session…');
+  const detections=await fetch('/api/session/'+encodeURIComponent(status.session_id)+'/detections').then(r=>r.json());
+  if(!detections.length){
+    document.getElementById('det-list').innerHTML='<div class="empty-feed">Session active. Waiting for detections.</div>';
+    return;
+  }
+  detections.forEach(d=>renderDetection({
+    severity:d.severity,
+    confidence:d.confidence,
+    location:d.location,
+    timestamp:d.timestamp
+  }, true));
+}
+
+loadFleet().then(restoreCurrentSession);
+
+async function startSession(){
+  const vid=document.getElementById('vehicle-id').value||'VEHICLE-01';
+  const route=document.getElementById('route').value||'City Route';
+  const r=await fetch('/api/session/start',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({vehicle_id:vid,route:route})});
+  const d=await r.json();
+  if (r.ok && d.session_id) {
+    await restoreCurrentSession();
+    return;
+  }
+  if (r.status === 409 && d.session && d.session.active) {
+    await restoreCurrentSession();
+    return;
+  }
+  alert(d.message || 'Unable to start session. Please try again.');
+}
+
+async function endSession(){
+  if(!confirm('End session and upload to Municipal Dashboard?')) return;
+  const r=await fetch('/api/session/end',{method:'POST'});
+  const d=await r.json();
+  setSessionUIInactive('Session uploaded ✓');
+  if(d.summary){
+    alert(`Session Complete!\nTotal: ${d.summary.total} | High: ${d.summary.high} | Medium: ${d.summary.medium}\nData sent to Municipal Dashboard.`);
+  }
+}
+
+function updateStats(){
+  document.getElementById('s-total').textContent=total;
+  document.getElementById('s-high').textContent=high;
+  document.getElementById('s-med').textContent=med;
+  document.getElementById('s-low').textContent=low;
+  doughChart.data.datasets[0].data=[high,med,low];
+  doughChart.update();
+}
+
+// ── Car Dashboard Warning Overlay ────────────────
+let warningTimeout = null;
+
+function showWarning(severity, confidence, location) {
+  const overlay = document.getElementById('warning-overlay');
+  const card    = document.getElementById('warning-card');
+  const flash   = document.getElementById('warning-flash');
+  const icon    = document.getElementById('w-icon');
+  const tag     = document.getElementById('w-tag');
+  const title   = document.getElementById('w-title');
+  const sub     = document.getElementById('w-sub');
+  const conf    = document.getElementById('w-conf');
+
+  // Clear previous timeout
+  if (warningTimeout) clearTimeout(warningTimeout);
+
+  // Set content & style per severity
+  if (severity === 'High') {
+    card.className = '';
+    icon.className = 'w-icon high';
+    tag.className  = 'w-tag high';
+    title.className= 'w-title high';
+    flash.className= 'flash-active-high';
+    icon.textContent  = '⚠';
+    tag.textContent   = '🚨 CRITICAL ROAD HAZARD';
+    title.innerHTML   = 'HIGH POTHOLE<br/>AHEAD';
+    sub.innerHTML     = '⚠&nbsp; REDUCE SPEED IMMEDIATELY &nbsp;⚠';
+    sub.style.color   = '#ff4444';
+  } else if (severity === 'Medium') {
+    card.className = 'medium';
+    icon.className = 'w-icon medium';
+    tag.className  = 'w-tag medium';
+    title.className= 'w-title medium';
+    flash.className= 'flash-active-medium';
+    icon.textContent  = '⚠';
+    tag.textContent   = '⚠ ROAD HAZARD DETECTED';
+    title.innerHTML   = 'MEDIUM POTHOLE<br/>AHEAD';
+    sub.innerHTML     = 'CAUTION — SLOW DOWN';
+    sub.style.color   = '#ff9900';
+  } else {
+    card.className = 'low';
+    icon.className = 'w-icon low';
+    tag.className  = 'w-tag low';
+    title.className= 'w-title low';
+    flash.className= '';
+    icon.textContent  = '●';
+    tag.textContent   = 'SURFACE ANOMALY';
+    title.innerHTML   = 'MINOR POTHOLE<br/>DETECTED';
+    sub.innerHTML     = 'MONITOR ROAD CONDITIONS';
+    sub.style.color   = '#00cc66';
+  }
+  conf.textContent = location
+    ? `Confidence: ${(confidence*100).toFixed(1)}%  ·  📍 ${location}`
+    : `Confidence: ${(confidence*100).toFixed(1)}%`;
+
+  overlay.classList.add('active');
+
+  // Dismiss after delay (High=4s, Medium=3s, Low=2s)
+  const dur = severity === 'High' ? 4000 : severity === 'Medium' ? 3000 : 2000;
+  warningTimeout = setTimeout(() => {
+    overlay.classList.remove('active');
+  }, dur);
+
+  // Dismiss on click/tap anywhere on the card
+  overlay.onclick = () => {
+    overlay.classList.remove('active');
+    if (warningTimeout) clearTimeout(warningTimeout);
+  };
+}
+
+// ── Virtual LED controller ───────────────────────────────
+// Web Audio context for buzzer sound
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playBuzz(frequency, duration, times){
+  for(let i=0; i<times; i++){
+    setTimeout(()=>{
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = frequency;
+      osc.type = 'square';
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration/1000);
+      osc.start(); osc.stop(audioCtx.currentTime + duration/1000);
+    }, i * (duration + 80));
+  }
+}
+
+function triggerLED(severity){
+  // Reset all LEDs
+  document.getElementById('led-green').className='led off';
+  document.getElementById('led-orange').className='led off';
+  document.getElementById('led-red').className='led off';
+  document.getElementById('car-led-g').style.fill='#1a2233';
+  document.getElementById('car-led-o').style.fill='#1a2233';
+  document.getElementById('car-led-r').style.fill='#1a2233';
+
+  const buzzer=document.getElementById('buzzer-icon');
+  let ledEl, carLedEl, className, duration;
+
+  if(severity==='Low'){
+    ledEl='led-green'; carLedEl='car-led-g';
+    className='led on-blue'; duration=600;
+    document.getElementById('car-led-g').style.fill='#3b82f6';
+    playBuzz(500, 150, 1);
+  } else if(severity==='Medium'){
+    ledEl='led-orange'; carLedEl='car-led-o';
+    className='led on-yellow'; duration=800;
+    document.getElementById('car-led-o').style.fill='#eab308';
+    playBuzz(1000, 150, 2);
+    buzzer.classList.remove('buzz');
+    void buzzer.offsetWidth;
+    buzzer.classList.add('buzz');
+    setTimeout(()=>buzzer.classList.remove('buzz'),500);
+  } else if(severity==='High'){
+    ledEl='led-red'; carLedEl='car-led-r';
+    className='led on-red'; duration=1500;
+    document.getElementById('car-led-r').style.fill='#ef4444';
+    playBuzz(2500, 200, 4);
+    buzzer.classList.remove('buzz');
+    void buzzer.offsetWidth;
+    buzzer.classList.add('buzz');
+    setTimeout(()=>buzzer.classList.remove('buzz'),800);
+    document.getElementById('cam-lens').style.fill='#ef4444';
+    setTimeout(()=>document.getElementById('cam-lens').style.fill='#0ea5e9',1000);
+  }
+
+  if(ledEl){
+    document.getElementById(ledEl).className=className;
+    setTimeout(()=>{
+      document.getElementById(ledEl).className='led off';
+      document.getElementById(carLedEl).style.fill='#1a2233';
+    }, duration);
+  }
+}
+
+socket.on('detection',function(data){
+  if(!sessionActive) return;
+  renderDetection(data, false);
+});
+
+socket.on('session_started', function(status){
+  if(status && status.active) restoreCurrentSession();
+});
+
+socket.on('session_ended', function(){
+  setSessionUIInactive('Session uploaded ✓');
+});
+</script>
+</body>
+</html>

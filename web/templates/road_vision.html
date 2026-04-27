@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>IRIS – Road Vision 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <style>
+    :root {
+      --bg: #04080f;
+      --surface: #080f1e;
+      --border: #0f2040;
+      --accent: #00d4ff;
+      --green: #00ff88;
+      --red: #ff2244;
+      --orange: #ff8800;
+      --text: #cce8ff;
+      --sub: #2a4a6a;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body { height:100%; background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; overflow:hidden; }
+
+    /* ── Header ── */
+    header {
+      position:fixed; top:0; left:0; right:0; z-index:100;
+      height:52px; background:rgba(4,8,15,0.9);
+      border-bottom:1px solid var(--border);
+      backdrop-filter:blur(12px);
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 20px;
+    }
+    .logo { display:flex; align-items:center; gap:10px; }
+    .logo-badge {
+      background:linear-gradient(135deg,#0044cc,#00d4ff);
+      border-radius:8px; padding:5px 10px;
+      font-family:'Orbitron',monospace; font-size:0.85rem; font-weight:900;
+      letter-spacing:2px; color:#fff;
+    }
+    .logo-title { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--sub); letter-spacing:1px; }
+    .hbtns { display:flex; gap:8px; align-items:center; }
+    .hbtn {
+      padding:6px 14px; border-radius:8px; font-size:0.75rem; font-weight:600;
+      cursor:pointer; border:1px solid var(--border); background:transparent;
+      color:var(--sub); font-family:'Space Grotesk',sans-serif; transition:all 0.15s;
+    }
+    .hbtn:hover { border-color:var(--accent); color:var(--text); }
+    .live-pill {
+      padding:4px 12px; border-radius:20px;
+      background:rgba(0,255,136,0.08); border:1px solid rgba(0,255,136,0.2);
+      font-family:'JetBrains Mono',monospace; font-size:0.68rem; color:var(--green);
+      display:flex; align-items:center; gap:6px;
+    }
+    .live-pill::before {
+      content:''; width:6px; height:6px; border-radius:50%;
+      background:var(--green); box-shadow:0 0 8px var(--green);
+      animation:blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── Main 3D canvas ── */
+    #road-canvas {
+      position:fixed; top:52px; left:0; right:0; bottom:0;
+      display:block;
+    }
+
+    /* ── HUD overlay ── */
+    #hud {
+      position:fixed; top:64px; left:16px;
+      display:flex; flex-direction:column; gap:8px;
+      z-index:50; pointer-events:none;
+    }
+    .hud-card {
+      background:rgba(4,8,15,0.8);
+      border:1px solid var(--border);
+      border-radius:10px; padding:10px 14px;
+      backdrop-filter:blur(8px);
+      min-width:160px;
+    }
+    .hud-label { font-family:'JetBrains Mono',monospace; font-size:0.58rem; letter-spacing:2px; color:var(--sub); text-transform:uppercase; margin-bottom:6px; }
+    .hud-stats { display:flex; gap:10px; }
+    .hud-stat { text-align:center; }
+    .hud-val { font-family:'Orbitron',monospace; font-size:1.1rem; font-weight:700; }
+    .hud-val.r { color:var(--red); text-shadow:0 0 10px var(--red); }
+    .hud-val.o { color:var(--orange); text-shadow:0 0 10px var(--orange); }
+    .hud-val.g { color:var(--green); text-shadow:0 0 10px var(--green); }
+    .hud-val.b { color:var(--accent); text-shadow:0 0 10px var(--accent); }
+    .hud-sub { font-family:'JetBrains Mono',monospace; font-size:0.55rem; color:var(--sub); }
+
+    /* ── Last detection banner ── */
+    #last-detection {
+      position:fixed; top:64px; right:16px;
+      width:260px; z-index:50;
+      background:rgba(4,8,15,0.88);
+      border:1px solid var(--border);
+      border-radius:12px; padding:14px;
+      backdrop-filter:blur(12px);
+      display:flex; flex-direction:column; gap:8px;
+    }
+    #last-detection .det-label { font-family:'JetBrains Mono',monospace; font-size:0.58rem; letter-spacing:2px; color:var(--sub); text-transform:uppercase; }
+    #last-detection .det-sev {
+      font-family:'Orbitron',monospace; font-size:1.0rem; font-weight:900;
+      letter-spacing:1px;
+    }
+    #last-detection .det-sev.High   { color:var(--red);    text-shadow:0 0 16px var(--red); }
+    #last-detection .det-sev.Medium { color:var(--orange);  text-shadow:0 0 12px var(--orange); }
+    #last-detection .det-sev.Low    { color:var(--green);   text-shadow:0 0 10px var(--green); }
+    #last-detection .det-conf { font-size:0.78rem; color:var(--text); }
+    #last-detection .det-loc  { font-family:'JetBrains Mono',monospace; font-size:0.62rem; color:var(--accent); }
+    #last-detection .det-ts   { font-size:0.62rem; color:var(--sub); }
+    #det-list-mini {
+      display:flex; flex-direction:column; gap:5px;
+      max-height:200px; overflow-y:auto;
+    }
+    #det-list-mini::-webkit-scrollbar { width:2px; }
+    #det-list-mini::-webkit-scrollbar-thumb { background:var(--border); }
+    .mini-item {
+      display:flex; align-items:center; gap:7px;
+      padding:6px 8px; background:rgba(255,255,255,0.03);
+      border-radius:6px; border:1px solid var(--border);
+      font-size:0.68rem;
+    }
+    .mini-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+    .mini-dot.High   { background:var(--red);    box-shadow:0 0 5px var(--red); }
+    .mini-dot.Medium { background:var(--orange);  box-shadow:0 0 5px var(--orange); }
+    .mini-dot.Low    { background:var(--green);   box-shadow:0 0 5px var(--green); }
+    .mini-sev { font-weight:700; }
+    .mini-conf { color:var(--sub); }
+
+    /* ── Bottom status bar ── */
+    #status-bar {
+      position:fixed; bottom:0; left:0; right:0;
+      height:36px; background:rgba(4,8,15,0.92);
+      border-top:1px solid var(--border);
+      display:flex; align-items:center; gap:20px;
+      padding:0 20px; z-index:50;
+      backdrop-filter:blur(8px);
+    }
+    .sb-item { font-family:'JetBrains Mono',monospace; font-size:0.62rem; color:var(--sub); display:flex; align-items:center; gap:5px; }
+    .sb-item span { color:var(--text); }
+
+    /* ── Pothole flash ── */
+    #ph-flash {
+      position:fixed; inset:0; pointer-events:none; z-index:60;
+      opacity:0; transition:opacity 0.1s;
+    }
+    #ph-flash.on { opacity:1; }
+
+    /* ── Warning overlay card ── */
+    #warning-overlay {
+      display: none;
+      position: fixed;
+      bottom: 52px;
+      right: 16px;
+      z-index: 70;
+      pointer-events: none;
+    }
+    #warning-overlay.active { display: block; }
+
+    #warning-card {
+      position: relative;
+      background: linear-gradient(160deg, #0a0000 0%, #1c0000 60%, #0d0000 100%);
+      border: 1.5px solid #ff0000;
+      border-radius: 14px;
+      padding: 16px 22px 14px;
+      text-align: center;
+      box-shadow:
+        0 0 0 1px rgba(255,0,0,0.25),
+        0 0 24px rgba(255,0,0,0.5),
+        0 0 60px rgba(255,0,0,0.2);
+      width: 280px;
+      pointer-events: all;
+      cursor: pointer;
+      animation: slideIn 0.25s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(40px); opacity: 0; }
+      to   { transform: translateX(0); opacity: 1; }
+    }
+    #warning-card.medium {
+      background: linear-gradient(160deg, #080400 0%, #1a0d00 60%, #0d0800 100%);
+      border-color: #ff8800;
+      box-shadow: 0 0 0 1px rgba(255,136,0,0.25), 0 0 24px rgba(255,136,0,0.45), 0 0 50px rgba(255,136,0,0.15);
+    }
+    #warning-card.low {
+      background: linear-gradient(160deg, #000a04 0%, #001a0d 60%, #000d06 100%);
+      border-color: #00cc66;
+      box-shadow: 0 0 0 1px rgba(0,204,102,0.25), 0 0 20px rgba(0,204,102,0.35);
+    }
+    #warning-card::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: 12px;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+      pointer-events: none;
+    }
+    .w-icon {
+      font-size: 2rem; line-height: 1;
+      margin-bottom: 4px; display: block;
+      filter: drop-shadow(0 0 8px currentColor);
+    }
+    .w-icon.high   { color: #ff2222; animation: iconPulse 0.5s ease-in-out infinite alternate; }
+    .w-icon.medium { color: #ff8800; animation: iconPulse 0.7s ease-in-out infinite alternate; }
+    .w-icon.low    { color: #00cc66; animation: iconPulse 1.0s ease-in-out infinite alternate; }
+    @keyframes iconPulse {
+      from { transform: scale(1); filter: drop-shadow(0 0 6px currentColor); }
+      to   { transform: scale(1.15); filter: drop-shadow(0 0 16px currentColor); }
+    }
+    .w-tag {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.52rem; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      margin-bottom: 4px; opacity: 0.7;
+    }
+    .w-tag.high   { color: #ff4444; }
+    .w-tag.medium { color: #ff9900; }
+    .w-tag.low    { color: #00cc66; }
+    .w-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.1rem; font-weight: 900;
+      letter-spacing: 1px; line-height: 1.15;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .w-title.high   { color: #ff1111; text-shadow: 0 0 14px rgba(255,0,0,0.9); animation: textGlitch 2s ease-in-out infinite; }
+    .w-title.medium { color: #ff8800; text-shadow: 0 0 12px rgba(255,136,0,0.8); }
+    .w-title.low    { color: #00cc66; text-shadow: 0 0 10px rgba(0,204,102,0.7); }
+    @keyframes textGlitch {
+      0%,95%,100% { transform: translateX(0); opacity: 1; }
+      96% { transform: translateX(-2px); opacity: 0.9; }
+      97% { transform: translateX(2px); opacity: 0.8; }
+      98% { transform: translateX(-1px); opacity: 1; }
+    }
+    .w-sub {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.58rem; letter-spacing: 1px; opacity: 0.8;
+      margin-bottom: 6px;
+    }
+    .w-conf {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6rem; opacity: 0.75; letter-spacing: 0.5px;
+      color: var(--text);
+    }
+    #warning-card::after {
+      content: ''; position: absolute;
+      left: 0; right: 0; bottom: 0; height: 2px;
+      border-radius: 0 0 12px 12px;
+      background: linear-gradient(90deg, transparent, #ff0000, transparent);
+      animation: barScan 1.5s linear infinite;
+    }
+    #warning-card.medium::after { background: linear-gradient(90deg, transparent, #ff8800, transparent); }
+    #warning-card.low::after { background: linear-gradient(90deg, transparent, #00cc66, transparent); animation: none; opacity: 0.5; }
+    @keyframes barScan { 0%{opacity:0.3} 50%{opacity:1} 100%{opacity:0.3} }
+    .w-corner { position:absolute; width:10px; height:10px; border-color:#ff2222; border-style:solid; opacity:0.7; }
+    .w-corner.tl { top:6px; left:6px; border-width:1.5px 0 0 1.5px; }
+    .w-corner.tr { top:6px; right:6px; border-width:1.5px 1.5px 0 0; }
+    .w-corner.bl { bottom:6px; left:6px; border-width:0 0 1.5px 1.5px; }
+    .w-corner.br { bottom:6px; right:6px; border-width:0 1.5px 1.5px 0; }
+    #warning-card.medium .w-corner { border-color:#ff8800; }
+    #warning-card.low .w-corner { border-color:#00cc66; }
+
+    /* ── Controls hint ── */
+    #controls-hint {
+      position:fixed; bottom:44px; right:16px;
+      font-family:'JetBrains Mono',monospace; font-size:0.58rem;
+      color:var(--sub); text-align:right; z-index:50;
+      line-height:1.8;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ph-flash"></div>
+<div id="warning-overlay">
+  <div id="warning-card">
+    <div class="w-corner tl"></div>
+    <div class="w-corner tr"></div>
+    <div class="w-corner bl"></div>
+    <div class="w-corner br"></div>
+    <span class="w-icon high" id="w-icon">⚠</span>
+    <div class="w-tag high" id="w-tag">Road Hazard Detected</div>
+    <div class="w-title high" id="w-title">HIGH POTHOLE<br/>AHEAD</div>
+    <div class="w-sub" id="w-sub" style="color:#ff4444">⚠ REDUCE SPEED IMMEDIATELY ⚠</div>
+    <div class="w-conf" id="w-conf">Confidence: —%</div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-badge">IRIS</div>
+    <div class="logo-title">/ ROAD VISION 3D — Real-time Pothole Scanner</div>
+  </div>
+  <div class="hbtns">
+    <div class="live-pill">LIVE SOCKET</div>
+    <button class="hbtn" onclick="toggleCamera()">🎥 Camera Mode</button>
+    <button class="hbtn" onclick="location.href='/live'">← Dashboard</button>
+    <button class="hbtn" onclick="location.href='/municipal'">🏛 Municipal</button>
+  </div>
+</header>
+
+<canvas id="road-canvas"></canvas>
+
+<!-- HUD left -->
+<div id="hud">
+  <div class="hud-card">
+    <div class="hud-label">Session Detections</div>
+    <div class="hud-stats">
+      <div class="hud-stat"><div class="hud-val r" id="h-high">0</div><div class="hud-sub">HIGH</div></div>
+      <div class="hud-stat"><div class="hud-val o" id="h-med">0</div><div class="hud-sub">MED</div></div>
+      <div class="hud-stat"><div class="hud-val g" id="h-low">0</div><div class="hud-sub">LOW</div></div>
+    </div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Road Health</div>
+    <div style="margin-top:4px">
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div id="health-bar" style="height:100%;width:100%;background:var(--green);border-radius:3px;transition:width 1s,background 0.5s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--sub)">POOR</span>
+        <span id="health-pct" style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--green)">100%</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--sub)">GOOD</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD right -->
+<div id="last-detection">
+  <div class="det-label">Last Detection</div>
+  <div class="det-sev" id="ld-sev" style="color:var(--sub)">— AWAITING —</div>
+  <div class="det-conf" id="ld-conf" style="color:var(--sub)">No active detection</div>
+  <div class="det-loc"  id="ld-loc"></div>
+  <div class="det-ts"   id="ld-ts"></div>
+  <div class="hud-label" style="margin-top:4px">Recent</div>
+  <div id="det-list-mini"></div>
+</div>
+
+<div id="status-bar">
+  <div class="sb-item">🔵 Camera <span id="sb-cam">Active</span></div>
+  <div class="sb-item">📡 Socket <span id="sb-sock">Connecting…</span></div>
+  <div class="sb-item">📍 Position <span id="sb-pos">—</span></div>
+  <div class="sb-item">⚡ Detections <span id="sb-total">0</span></div>
+  <div class="sb-item" style="margin-left:auto">Scroll/Drag to orbit · Scroll to zoom</div>
+</div>
+
+<div id="controls-hint">
+  SCROLL to zoom<br>
+  DRAG to orbit<br>
+  SPACE to reset cam
+</div>
+
+<script>
+// ── Pre-declare functions called from onclick handlers ──
+function toggleCamera() {
+  camMode = (camMode+1) % camModes.length;
+  document.querySelector('.hbtn').textContent = '🎥 ' + camModes[camMode];
+}
+
+// ══════════════════════════════════════════════════
+//  THREE.JS ROAD VISION SCENE
+// ══════════════════════════════════════════════════
+const canvas = document.getElementById('road-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x04080f, 1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x04080f, 0.018);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 300);
+camera.position.set(0, 12, 22);
+camera.lookAt(0, 0, -5);
+
+function resizeRenderer() {
+  const w = window.innerWidth, h = window.innerHeight - 52 - 36;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resizeRenderer();
+window.addEventListener('resize', resizeRenderer);
+
+// ── Lights ──────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x0a1530, 4));
+
+const sun = new THREE.DirectionalLight(0x4488ff, 2);
+sun.position.set(8, 20, 10);
+sun.castShadow = true;
+sun.shadow.camera.left = -30; sun.shadow.camera.right = 30;
+sun.shadow.camera.top  =  30; sun.shadow.camera.bottom = -30;
+sun.shadow.camera.far  = 80;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+
+const dimLight = new THREE.DirectionalLight(0x002244, 1.2);
+dimLight.position.set(-10, 10, -5);
+scene.add(dimLight);
+
+// ── Road ────────────────────────────────────────
+const ROAD_LEN = 120, ROAD_W = 8;
+
+// Tarmac surface
+const roadGeo = new THREE.PlaneGeometry(ROAD_W, ROAD_LEN, 8, 60);
+const roadMat = new THREE.MeshStandardMaterial({ color:0x0a1525, roughness:0.95, metalness:0.05 });
+const road = new THREE.Mesh(roadGeo, roadMat);
+road.rotation.x = -Math.PI/2;
+road.position.set(0, 0, -ROAD_LEN/2 + 15);
+road.receiveShadow = true;
+scene.add(road);
+
+// Road edge lines
+function makeLine(x, z0, zLen, color) {
+  const geo = new THREE.BoxGeometry(0.12, 0.04, zLen);
+  const mat = new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.4 });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, 0.02, z0);
+  scene.add(m);
+}
+makeLine(-ROAD_W/2, -ROAD_LEN/2+15, ROAD_LEN, 0xffffff);
+makeLine( ROAD_W/2, -ROAD_LEN/2+15, ROAD_LEN, 0xffffff);
+makeLine(-1.2, -ROAD_LEN/2+15, ROAD_LEN, 0xffdd00);
+makeLine( 1.2, -ROAD_LEN/2+15, ROAD_LEN, 0xffdd00);
+
+// Center dashes
+for (let z = -50; z < 20; z += 4) {
+  const geo = new THREE.BoxGeometry(0.1, 0.04, 2.2);
+  const mat = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffffff, emissiveIntensity:0.3 });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(0, 0.02, z);
+  scene.add(m);
+}
+
+// Sidewalks
+[-1, 1].forEach(s => {
+  const geo = new THREE.BoxGeometry(3, 0.2, ROAD_LEN);
+  const mat = new THREE.MeshStandardMaterial({ color:0x0d1e32, roughness:1 });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(s*(ROAD_W/2+1.5), 0.1, -ROAD_LEN/2+15);
+  m.receiveShadow = true;
+  scene.add(m);
+});
+
+// ── Street lamps ─────────────────────────────────
+for (let z = -50; z < 20; z += 14) {
+  [-1,1].forEach(s => {
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.08, 4, 6),
+      new THREE.MeshStandardMaterial({ color:0x1a2a40, roughness:0.8 })
+    );
+    pole.position.set(s*5.5, 2, z);
+    pole.castShadow = true;
+    scene.add(pole);
+    const arm = new THREE.Mesh(
+      new THREE.BoxGeometry(s*-0.8, 0.06, 0.06),
+      new THREE.MeshStandardMaterial({ color:0x1a2a40 })
+    );
+    arm.position.set(s*5.1, 4, z);
+    scene.add(arm);
+    // Lamp glow
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 8, 8),
+      new THREE.MeshStandardMaterial({ color:0xffeebb, emissive:0xffeebb, emissiveIntensity:2 })
+    );
+    lamp.position.set(s*4.7, 4.1, z);
+    scene.add(lamp);
+    const pl = new THREE.PointLight(0xffeebb, 1.2, 12);
+    pl.position.copy(lamp.position);
+    scene.add(pl);
+  });
+}
+
+// ── Background city ──────────────────────────────
+const bgBuildings = [
+  [-20,0,-60,3,18,3],[-16,0,-62,2.5,12,2.5],[-12,0,-60,3,22,3],[-8,0,-64,2,10,2],
+  [8,0,-60,3,16,3],[12,0,-62,2.5,24,2.5],[16,0,-60,3,14,3],[20,0,-64,2,9,2],
+  [-22,0,-40,2.5,10,2.5],[22,0,-40,2.5,14,2.5],
+];
+bgBuildings.forEach(([x,y,z,bw,bh,bd]) => {
+  const geo = new THREE.BoxGeometry(bw, bh, bd);
+  const mat = new THREE.MeshStandardMaterial({ color:0x080f1e, roughness:0.9, metalness:0.1 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, bh/2, z);
+  scene.add(mesh);
+  const edges = new THREE.EdgesGeometry(geo);
+  const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color:0x0a2044, transparent:true, opacity:0.6 }));
+  line.position.copy(mesh.position);
+  scene.add(line);
+  // windows
+  for (let i=0; i<Math.floor(bh*0.8); i++) {
+    if (Math.random()>0.5) {
+      const w = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.3,0.35),
+        new THREE.MeshBasicMaterial({ color: Math.random()>0.6?0x00aaff:0x002255, transparent:true, opacity:0.7+Math.random()*0.3 })
+      );
+      w.position.set(x+bw/2+0.01, 0.5+i*0.6, z+(Math.random()-0.5)*bd*0.7);
+      scene.add(w);
+    }
+  }
+});
+
+// ── Pothole manager ──────────────────────────────
+const potholeGroup = new THREE.Group();
+scene.add(potholeGroup);
+const potholes = [];
+let totalH=0, totalM=0, totalL=0, totalAll=0;
+const POTHOLE_LIFETIME_SEC = 6.0;
+
+const SEV = {
+  High:   { crater:0xff1133, crack:0xcc0022, glow:0xff0033, light:0xff2244, plCol:'#ff2244' },
+  Medium: { crater:0xff6600, crack:0xcc4400, glow:0xff8800, light:0xff8800, plCol:'#ff8800' },
+  Low:    { crater:0x00bb55, crack:0x008833, glow:0x00ee66, light:0x00ff88, plCol:'#00ff88' },
+};
+
+function spawnPothole(severity, x, z) {
+  const cfg = SEV[severity] || SEV.Low;
+  const radius = severity==='High' ? 0.7+Math.random()*0.4 :
+                 severity==='Medium' ? 0.45+Math.random()*0.3 : 0.2+Math.random()*0.2;
+  const depth  = severity==='High' ? 0.18 : severity==='Medium' ? 0.12 : 0.06;
+  const cracks = [];
+
+  // Crater disc (depressed)
+  const craterGeo = new THREE.CylinderGeometry(radius, radius*0.7, depth, 16);
+  const craterMat = new THREE.MeshStandardMaterial({ color:cfg.crater, roughness:0.9, metalness:0.1, transparent:true, opacity:1.0 });
+  const crater = new THREE.Mesh(craterGeo, craterMat);
+  crater.position.set(x, -depth/2, z);
+  crater.receiveShadow = true;
+  potholeGroup.add(crater);
+
+  // Crack lines radiating outward
+  const crackCount = severity==='High' ? 6 : severity==='Medium' ? 4 : 2;
+  for (let i=0; i<crackCount; i++) {
+    const angle = (i/crackCount)*Math.PI*2 + Math.random()*0.3;
+    const crackLen = radius + 0.2 + Math.random()*0.4;
+    const pts = [
+      new THREE.Vector3(x + Math.cos(angle)*0.1, 0.02, z + Math.sin(angle)*0.1),
+      new THREE.Vector3(x + Math.cos(angle)*crackLen, 0.02, z + Math.sin(angle)*crackLen),
+    ];
+    const crackGeo = new THREE.BufferGeometry().setFromPoints(pts);
+    const crackMat = new THREE.LineBasicMaterial({ color:cfg.crack, transparent:true, opacity:0.8 });
+    const crackLine = new THREE.Line(crackGeo, crackMat);
+    potholeGroup.add(crackLine);
+    cracks.push(crackLine);
+  }
+
+  // Glowing ring on surface
+  const ringGeo = new THREE.RingGeometry(radius+0.05, radius+0.22, 20);
+  const ringMat = new THREE.MeshBasicMaterial({ color:cfg.glow, side:THREE.DoubleSide, transparent:true, opacity:0.6 });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI/2;
+  ring.position.set(x, 0.02, z);
+  ring.userData.baseOpacity = 0.6;
+  ring.userData.phase = Math.random()*Math.PI*2;
+  potholeGroup.add(ring);
+
+  // Severity label floating above
+  const pl = new THREE.PointLight(cfg.light, severity==='High'?3:severity==='Medium'?2:1, severity==='High'?5:3);
+  pl.position.set(x, 1.5, z);
+  pl._irisLight = true;
+  potholeGroup.add(pl);
+
+  potholes.push({ crater, cracks, ring, pl, severity, x, z, age: 0, radius, baseLight: pl.intensity });
+  return { crater, ring, pl };
+}
+
+// ── Particles (dust/debris) on detection ─────────
+const particlePool = [];
+function spawnParticles(x, z, color) {
+  const count = 18;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count*3);
+  const velocities = [];
+  for (let i=0; i<count; i++) {
+    positions[i*3]   = x + (Math.random()-0.5)*0.2;
+    positions[i*3+1] = 0.05;
+    positions[i*3+2] = z + (Math.random()-0.5)*0.2;
+    velocities.push([
+      (Math.random()-0.5)*0.08,
+      Math.random()*0.12 + 0.04,
+      (Math.random()-0.5)*0.08
+    ]);
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({ color, size:0.12, transparent:true, opacity:0.9 });
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  particlePool.push({ pts, velocities, life:1.0 });
+}
+
+// ── Camera orbit controls ────────────────────────
+let isDragging=false, lastMX=0, lastMY=0;
+let camTheta=0, camPhi=0.55, camDist=24, camTarget=new THREE.Vector3(0,0,-5);
+let camMode = 0; // 0=orbit, 1=chase, 2=topdown
+const camModes = ['Orbit','Chase','Top-Down'];
+
+canvas.addEventListener('mousedown', e=>{isDragging=true;lastMX=e.clientX;lastMY=e.clientY;});
+canvas.addEventListener('mouseup',   ()=>isDragging=false);
+canvas.addEventListener('mousemove', e=>{
+  if(!isDragging||camMode!==0) return;
+  camTheta -= (e.clientX-lastMX)*0.005;
+  camPhi    = Math.max(0.1, Math.min(1.4, camPhi-(e.clientY-lastMY)*0.005));
+  lastMX=e.clientX; lastMY=e.clientY;
+});
+canvas.addEventListener('wheel', e=>{
+  camDist = Math.max(6, Math.min(60, camDist+e.deltaY*0.04));
+});
+document.addEventListener('keydown', e=>{
+  if(e.code==='Space'){camTheta=0;camPhi=0.55;camDist=24;e.preventDefault();}
+});
+
+function updateCamera(t) {
+  if (camMode===0) {
+    // Orbit
+    camera.position.x = camTarget.x + Math.sin(camTheta)*Math.cos(camPhi)*camDist;
+    camera.position.y = camTarget.y + Math.sin(camPhi)*camDist;
+    camera.position.z = camTarget.z + Math.cos(camTheta)*Math.cos(camPhi)*camDist;
+    camera.lookAt(camTarget);
+  } else if (camMode===1) {
+    // Chase cam — follows road
+    const zPos = -5 + Math.sin(t*0.15)*8;
+    camera.position.set(0, 3.5, zPos+10);
+    camera.lookAt(0, 1.5, zPos-8);
+  } else {
+    // Top-down
+    camera.position.set(0, 28, 0);
+    camera.lookAt(0, 0, -5);
+  }
+}
+
+// ── Road scroll simulation ────────────────────────
+// In a real system this would come from GPS. Here we animate dashes scrolling.
+let roadScroll = 0;
+
+// ── HUD updates ──────────────────────────────────
+function updateHealth() {
+  const score = Math.max(0, 100 - totalH*12 - totalM*5 - totalL*1);
+  const bar = document.getElementById('health-bar');
+  const pct = document.getElementById('health-pct');
+  bar.style.width = score+'%';
+  const col = score>70?'#00ff88':score>40?'#ff8800':'#ff2244';
+  bar.style.background = col;
+  pct.style.color = col;
+  pct.textContent = score+'%';
+}
+
+let warningTimeout = null;
+
+function showWarning(severity, confidence, location) {
+  const overlay = document.getElementById('warning-overlay');
+  const card    = document.getElementById('warning-card');
+  const icon    = document.getElementById('w-icon');
+  const tag     = document.getElementById('w-tag');
+  const title   = document.getElementById('w-title');
+  const sub     = document.getElementById('w-sub');
+  const conf    = document.getElementById('w-conf');
+
+  if (warningTimeout) clearTimeout(warningTimeout);
+
+  if (severity === 'High') {
+    card.className = '';
+    icon.className = 'w-icon high';
+    tag.className  = 'w-tag high';
+    title.className= 'w-title high';
+    icon.textContent = '⚠';
+    tag.textContent = 'CRITICAL ROAD HAZARD';
+    title.innerHTML = 'HIGH POTHOLE<br/>AHEAD';
+    sub.innerHTML = '⚠ REDUCE SPEED IMMEDIATELY ⚠';
+    sub.style.color = '#ff4444';
+  } else if (severity === 'Medium') {
+    card.className = 'medium';
+    icon.className = 'w-icon medium';
+    tag.className  = 'w-tag medium';
+    title.className= 'w-title medium';
+    icon.textContent = '⚠';
+    tag.textContent = 'ROAD HAZARD DETECTED';
+    title.innerHTML = 'MEDIUM POTHOLE<br/>AHEAD';
+    sub.innerHTML = 'CAUTION — SLOW DOWN';
+    sub.style.color = '#ff9900';
+  } else {
+    card.className = 'low';
+    icon.className = 'w-icon low';
+    tag.className  = 'w-tag low';
+    title.className= 'w-title low';
+    icon.textContent = '●';
+    tag.textContent = 'SURFACE ANOMALY';
+    title.innerHTML = 'MINOR POTHOLE<br/>DETECTED';
+    sub.innerHTML = 'MONITOR ROAD CONDITIONS';
+    sub.style.color = '#00cc66';
+  }
+
+  conf.textContent = location
+    ? `Confidence: ${(confidence*100).toFixed(1)}%  ·  📍 ${location}`
+    : `Confidence: ${(confidence*100).toFixed(1)}%`;
+
+  overlay.classList.add('active');
+  const dur = severity === 'High' ? 4000 : severity === 'Medium' ? 3000 : 2000;
+  warningTimeout = setTimeout(() => overlay.classList.remove('active'), dur);
+  overlay.onclick = () => {
+    overlay.classList.remove('active');
+    if (warningTimeout) clearTimeout(warningTimeout);
+  };
+}
+
+// ── Socket.IO real-time detections ───────────────
+const socket = io();
+socket.on('connect', ()=>{ document.getElementById('sb-sock').textContent='Connected'; });
+socket.on('disconnect', ()=>{ document.getElementById('sb-sock').textContent='Disconnected'; });
+
+socket.on('detection', function(data) {
+  const sev = data.severity || 'Low';
+  if(sev==='High') totalH++; else if(sev==='Medium') totalM++; else totalL++;
+  totalAll++;
+
+  // Place pothole on road at random lane position, z slightly in front
+  const laneX = (Math.random()-0.5)*5;
+  const laneZ = (Math.random()-0.5)*20 - 10;
+  spawnPothole(sev, laneX, laneZ);
+  spawnParticles(laneX, laneZ, SEV[sev]?.glow || 0x00ff88);
+
+  // Flash
+  const flash = document.getElementById('ph-flash');
+  const flashColor = sev==='High'?'rgba(255,20,50,0.25)':sev==='Medium'?'rgba(255,140,0,0.18)':'rgba(0,255,136,0.12)';
+  flash.style.background = flashColor;
+  flash.classList.add('on');
+  setTimeout(()=>flash.classList.remove('on'), 200);
+  showWarning(sev, data.confidence, data.location);
+
+  // HUD
+  document.getElementById('h-high').textContent = totalH;
+  document.getElementById('h-med').textContent  = totalM;
+  document.getElementById('h-low').textContent  = totalL;
+  document.getElementById('sb-total').textContent = totalAll;
+
+  // Last detection panel
+  const ldSev = document.getElementById('ld-sev');
+  ldSev.textContent = sev + ' POTHOLE';
+  ldSev.className = 'det-sev ' + sev;
+  document.getElementById('ld-conf').textContent = 'Confidence: ' + (data.confidence*100).toFixed(1) + '%';
+  document.getElementById('ld-loc').textContent  = data.location ? '📍 '+data.location : '';
+  document.getElementById('ld-ts').textContent   = data.timestamp || '';
+
+  // Mini list
+  const mini = document.getElementById('det-list-mini');
+  const item = document.createElement('div');
+  item.className = 'mini-item';
+  item.innerHTML = `<div class="mini-dot ${sev}"></div><span class="mini-sev">${sev}</span><span class="mini-conf">${(data.confidence*100).toFixed(1)}%</span>`;
+  mini.insertBefore(item, mini.firstChild);
+  if(mini.children.length>8) mini.removeChild(mini.lastChild);
+
+  // GPS position
+  if (data.location) document.getElementById('sb-pos').textContent = data.location;
+
+  updateHealth();
+});
+
+// ── Demo fallback when no live session/detections are available ───────────
+setTimeout(async () => {
+  const status = await fetch('/api/session/status').then(r => r.json()).catch(() => ({ active: false }));
+  if (status.active || totalAll > 0) return;
+  const demos = [
+    {severity:'High',   confidence:0.91, location:'27.1767,78.0081', timestamp:'Demo'},
+    {severity:'Medium', confidence:0.74, location:'27.1771,78.0089', timestamp:'Demo'},
+    {severity:'Low',    confidence:0.55, location:'27.1763,78.0074', timestamp:'Demo'},
+    {severity:'High',   confidence:0.88, location:'27.1780,78.0100', timestamp:'Demo'},
+    {severity:'Medium', confidence:0.67, location:'27.1755,78.0065', timestamp:'Demo'},
+  ];
+  demos.forEach((d, i) => setTimeout(() => triggerDemo(d), i*800));
+}, 5000);
+
+function triggerDemo(data) {
+  // Directly trigger without socket (client-side demo)
+  const sev = data.severity;
+  if(sev==='High') totalH++; else if(sev==='Medium') totalM++; else totalL++;
+  totalAll++;
+  const laneX = (Math.random()-0.5)*5;
+  const laneZ = (Math.random()-0.5)*20 - 10;
+  spawnPothole(sev, laneX, laneZ);
+  spawnParticles(laneX, laneZ, SEV[sev]?.glow||0x00ff88);
+  showWarning(sev, data.confidence, data.location);
+  document.getElementById('h-high').textContent = totalH;
+  document.getElementById('h-med').textContent  = totalM;
+  document.getElementById('h-low').textContent  = totalL;
+  document.getElementById('sb-total').textContent = totalAll;
+  const ldSev = document.getElementById('ld-sev');
+  ldSev.textContent = sev + ' POTHOLE'; ldSev.className = 'det-sev '+sev;
+  document.getElementById('ld-conf').textContent = 'Confidence: '+(data.confidence*100).toFixed(1)+'%';
+  document.getElementById('ld-loc').textContent  = data.location ? '📍 '+data.location : '';
+  const mini = document.getElementById('det-list-mini');
+  const item = document.createElement('div'); item.className='mini-item';
+  item.innerHTML=`<div class="mini-dot ${sev}"></div><span class="mini-sev">${sev}</span><span class="mini-conf">${(data.confidence*100).toFixed(1)}%</span>`;
+  mini.insertBefore(item,mini.firstChild);
+  if(mini.children.length>8) mini.removeChild(mini.lastChild);
+  updateHealth();
+}
+
+// ── Animation loop ───────────────────────────────
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t = Date.now() * 0.001;
+  roadScroll += 0.04;
+
+  updateCamera(t);
+
+  for (let i = potholes.length - 1; i >= 0; i--) {
+    const p = potholes[i];
+    p.age += 1 / 60;
+    const lifeLeft = Math.max(0, 1 - (p.age / POTHOLE_LIFETIME_SEC));
+
+    p.crater.material.opacity = lifeLeft;
+    p.ring.material.opacity = p.ring.userData.baseOpacity * (0.6 + Math.abs(Math.sin(t*2+p.ring.userData.phase))*0.4) * lifeLeft;
+    p.ring.scale.setScalar(1 + Math.abs(Math.sin(t*1.5+p.ring.userData.phase))*0.15);
+    p.pl.intensity = p.baseLight * lifeLeft;
+    p.cracks.forEach(crack => {
+      crack.material.opacity = 0.8 * lifeLeft;
+    });
+
+    if (p.age >= POTHOLE_LIFETIME_SEC) {
+      potholeGroup.remove(p.crater);
+      potholeGroup.remove(p.ring);
+      potholeGroup.remove(p.pl);
+      p.cracks.forEach(crack => potholeGroup.remove(crack));
+      potholes.splice(i, 1);
+    }
+  }
+
+  // Animate road dash scroll (simulate movement)
+  if (camMode===1) {
+    scene.children.filter(c=>c.isMesh&&c.geometry?.type==='BoxGeometry'&&c.position.y===0.02&&Math.abs(c.scale.x)===1).forEach(dash=>{
+      dash.position.z += 0.04;
+      if(dash.position.z > 20) dash.position.z -= 70;
+    });
+  }
+
+  // Particle update
+  for (let i=particlePool.length-1; i>=0; i--) {
+    const p = particlePool[i];
+    p.life -= 0.02;
+    if(p.life<=0) { scene.remove(p.pts); particlePool.splice(i,1); continue; }
+    const pos = p.pts.geometry.attributes.position.array;
+    for(let j=0; j<p.velocities.length; j++) {
+      pos[j*3]   += p.velocities[j][0];
+      pos[j*3+1] += p.velocities[j][1];
+      pos[j*3+2] += p.velocities[j][2];
+      p.velocities[j][1] -= 0.004; // gravity
+    }
+    p.pts.geometry.attributes.position.needsUpdate = true;
+    p.pts.material.opacity = p.life * 0.9;
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

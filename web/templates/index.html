@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRIS – Intelligent Road Infrastructure System</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      text-align: center;
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 60px 40px;
+      max-width: 600px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+    
+    .logo {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      font-size: 1.1rem;
+      color: #64748b;
+      margin-bottom: 40px;
+    }
+    
+    .status-box {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 40px;
+      text-align: left;
+    }
+    
+    .status-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      font-size: 1rem;
+    }
+    
+    .status-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #22c55e;
+      margin-right: 12px;
+      display: inline-block;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 12px;
+      flex-direction: column;
+      margin-top: 30px;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-secondary {
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+      border: 1px solid #3b82f6;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+    
+    .footer {
+      margin-top: 40px;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+    
+    .footer a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 600px) {
+      .container {
+        padding: 40px 24px;
+      }
+      
+      h1 {
+        font-size: 2rem;
+      }
+      
+      .button-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🛣️</div>
+    <h1>IRIS</h1>
+    <p class="subtitle">Intelligent Road Infrastructure System</p>
+    
+    <div class="status-box">
+      <div class="status-item">
+        <span class="status-dot"></span>
+        <span>✓ Gemini AI Analysis: ENABLED</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot"></span>
+        <span>✓ Cloud Database: FIRESTORE ACTIVE</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot"></span>
+        <span>✓ Real-time Detection: LIVE</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot"></span>
+        <span>✓ System Status: OPERATIONAL</span>
+      </div>
+    </div>
+    
+    <div class="button-group">
+      <a href="http://localhost:5000" class="btn btn-primary" target="_blank">
+        Launch Local Dashboard →
+      </a>
+      <a href="dashboard.html" class="btn btn-secondary">
+        View Static Dashboard
+      </a>
+    </div>
+    
+    <div class="footer">
+      <p>🚀 Advanced pothole detection & reporting system</p>
+      <p>Project hosted with <a href="https://firebase.google.com/">Firebase</a> | Powered by <a href="https://ai.google.dev/">Google AI</a></p>
+    </div>
+  </div>
+</body>
+</html>

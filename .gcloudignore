@@ -1,0 +1,58 @@
+# .gcloudignore file for Cloud Run deployment
+# Exclude files not needed in the cloud
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+venv/
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Misc
+README.md
+*.md
+.gitattributes
+*.sqlite
+iris.db
+
+# Keep only essential files for deployment
+# Local snapshots are excluded (will be stored in Cloud Storage)
+snapshots/
+
+# Arduino code (not needed in cloud)
+arduino/
+
+# Notebooks (local development)
+*.ipynb
+
+# Test files
+test_*.py
+verify_fixes.py
+
+# Documentation
+DEPLOYMENT_STATUS.txt
+GITHUB_SETUP.md

@@ -1,0 +1,41 @@
+# IRIS — Intelligent Road Inspection System
+# Team Grey Hats | Technomax 2026
+# Install: pip install -r requirements.txt
+
+# Core AI & Vision
+ultralytics>=8.4.0
+opencv-python>=4.8.0
+
+# Biometric & Face Recognition ✨
+dlib-bin>=20.0.1; platform_system == "Windows" and python_version >= "3.11"
+face_recognition_models>=0.3.0
+click>=8.0.0
+Pillow>=10.0.0
+# On Windows, install_biometric.py installs face-recognition with --no-deps
+# after dlib-bin, avoiding a local Visual C++ dlib build.
+
+# Web Framework
+flask>=3.0.0
+flask-socketio>=5.3.6
+eventlet>=0.35.2
+
+# PDF Report
+reportlab>=4.1.0
+
+# GPS — Windows Location API
+winsdk==1.0.0b10; platform_system == "Windows"
+
+# Arduino Serial Communication
+pyserial>=3.5
+
+# Voice Alert
+pyttsx3>=2.90
+
+# Google Generative AI (Gemini)
+google-generativeai>=0.3.0
+
+# Cloud deployment
+gunicorn>=21.2.0
+
+# Firebase (Cloud Database)
+firebase-admin>=6.2.0

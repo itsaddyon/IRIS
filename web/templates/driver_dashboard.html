@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IRIS Field Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 100%);
+      color: #f1f5f9;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─── */
+    header {
+      background: rgba(17, 24, 39, 0.95);
+      border-bottom: 1px solid #1e293b;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(10px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .logo-text {
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .logout-btn {
+      padding: 8px 16px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      border-radius: 6px;
+      color: #fca5a5;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.3s ease;
+    }
+
+    .logout-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ffffff;
+    }
+
+    .header-btn {
+      padding: 8px 16px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      color: #60a5fa;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .header-btn:hover {
+      background: rgba(59, 130, 246, 0.2);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Main Content ─── */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+      border-radius: 2px;
+    }
+
+    /* ─── Welcome Section ─── */
+    .welcome-banner {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(96, 165, 250, 0.05) 100%);
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .welcome-banner h1 {
+      font-size: 2rem;
+      color: #60a5fa;
+      margin-bottom: 8px;
+    }
+
+    .welcome-banner p {
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    /* ─── Inspection Session ─── */
+    .session-control {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .session-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .session-field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .session-field label {
+      color: #64748b;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .session-field select {
+      padding: 10px;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.95rem;
+    }
+
+    .session-field select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .session-btn {
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      width: 100%;
+      transition: all 0.3s ease;
+    }
+
+    .session-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(59, 130, 246, 0.4);
+    }
+
+    .session-status {
+      margin-top: 12px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+
+    /* ─── Stats Grid ─── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.2);
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #3b82f6;
+      margin-bottom: 8px;
+    }
+
+    .stat-detail {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    /* ─── Content Grid ─── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ─── Video Section ─── */
+    .video-section {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .video-container {
+      position: relative;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      max-width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .video-stream {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .feed-status {
+      text-align: center;
+      color: #64748b;
+      font-size: 0.85rem;
+      margin-top: 12px;
+    }
+
+    /* ─── System Status ─── */
+    .system-status {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .status-box {
+      background: rgba(30, 41, 59, 0.5);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .status-box-title {
+      color: #64748b;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .status-label {
+      color: #cbd5e1;
+    }
+
+    .status-value {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .led-container {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    .led {
+      text-align: center;
+    }
+
+    .led-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin: 0 auto 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .led-label {
+      color: #64748b;
+      font-size: 0.75rem;
+    }
+
+    /* ─── Detections Section ─── */
+    .detections-section {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 24px;
+    }
+
+    .detection-item {
+      background: rgba(30, 41, 59, 0.5);
+      border-left: 3px solid #3b82f6;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .detection-item:hover {
+      border-left-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.7);
+    }
+
+    .detection-item.high {
+      border-left-color: #ef4444;
+    }
+
+    .detection-item.medium {
+      border-left-color: #eab308;
+    }
+
+    .detection-item.low {
+      border-left-color: #22c55e;
+    }
+
+    .detection-info {
+      flex: 1;
+    }
+
+    .detection-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .detection-severity {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .detection-severity.high {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .detection-severity.medium {
+      background: rgba(234, 179, 8, 0.2);
+      color: #fef08a;
+    }
+
+    .detection-severity.low {
+      background: rgba(34, 197, 94, 0.2);
+      color: #86efac;
+    }
+
+    .detection-details {
+      font-size: 0.85rem;
+      color: #64748b;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .detection-detail-item {
+      display: flex;
+      gap: 6px;
+    }
+
+    .detection-detail-label {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .detection-detail-value {
+      color: #cbd5e1;
+    }
+
+    .detection-btn {
+      padding: 6px 12px;
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.3s ease;
+    }
+
+    .detection-btn:hover {
+      background: rgba(59, 130, 246, 0.3);
+    }
+
+    /* ─── Welcome Message ─── */
+    .welcome-message {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid #1e293b;
+      border-left: 3px solid #3b82f6;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .welcome-message-icon {
+      font-size: 1.5rem;
+    }
+
+    .welcome-message-text {
+      flex: 1;
+    }
+
+    .welcome-message-text strong {
+      color: #ffffff;
+    }
+
+    .welcome-message-text p {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🚗</div>
+      <div class="logo-text">IRIS Field Dashboard</div>
+    </div>
+    <div class="header-actions">
+      <span id="status-indicator" style="display:flex; gap:8px; align-items:center; color:#22c55e; font-size:0.85rem; font-weight:600;">
+        <span style="width:8px; height:8px; background:#22c55e; border-radius:50%;"></span>
+        <span>Live</span>
+        <span id="session-timestamp" style="color:#64748b; margin-left:8px;">—</span>
+      </span>
+      <button class="header-btn" onclick="viewRoadVision()">🎥 Road Vision 3D</button>
+      <button class="header-btn" onclick="goToMunicipal()">🏛️ Municipal Portal →</button>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container">
+    <!-- Loading State -->
+    <div id="loading" class="loading" style="display: none;">
+      ⏳ Loading dashboard...
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="error" style="display: none;"></div>
+
+    <!-- Dashboard Content -->
+    <div id="dashboard" style="display: none;">
+      <!-- Welcome Banner -->
+      <div class="welcome-banner">
+        <h1>👋 Welcome, <span id="driver-name">Driver</span>!</h1>
+        <p>Ready to start your road inspection. Select a vehicle and route below.</p>
+      </div>
+
+      <!-- Inspection Session Control -->
+      <div class="session-control">
+        <h2 class="section-title">🚗 Inspection Session</h2>
+        <div class="session-grid">
+          <div class="session-field">
+            <label>Vehicle</label>
+            <select id="vehicleSelector">
+              <option>Select Vehicle...</option>
+            </select>
+          </div>
+          <div class="session-field">
+            <label>Route</label>
+            <select id="routeSelector">
+              <option>Select Route...</option>
+            </select>
+          </div>
+        </div>
+        <button class="session-btn" onclick="startSession()">▶ Start Inspection</button>
+        <div class="session-status">
+          <span id="sessionStatusText">No active session</span>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">📊 Total Detections</div>
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-detail">This session</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">🔴 High Severity</div>
+          <div class="stat-value" id="stat-high" style="color: #ef4444;">0</div>
+          <div class="stat-detail">Urgent repairs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">🟡 Medium Severity</div>
+          <div class="stat-value" id="stat-medium" style="color: #eab308;">0</div>
+          <div class="stat-detail">Scheduled repairs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">🟢 Low Severity</div>
+          <div class="stat-value" id="stat-low" style="color: #22c55e;">0</div>
+          <div class="stat-detail">Monitor only</div>
+        </div>
+      </div>
+
+      <!-- Content Grid -->
+      <div class="content-grid">
+        <!-- Live Detection Feed -->
+        <div class="video-section">
+          <h2 class="section-title">📹 Live Detection Feed</h2>
+          <div class="video-container">
+            <img id="videoStream" class="video-stream" src="/video_feed" alt="Live camera feed" />
+          </div>
+          <p class="feed-status">
+            <span id="feedStatusText">Waiting to start session...</span>
+          </p>
+        </div>
+
+        <!-- System Status -->
+        <div class="system-status">
+          <h2 class="section-title">⚙️ System Status</h2>
+
+          <!-- Hardware LEDs -->
+          <div class="status-box">
+            <div class="status-box-title">Hardware Indicator LEDs</div>
+            <div class="led-container">
+              <div class="led">
+                <div class="led-circle" style="background: rgba(34, 197, 94, 0.2); border: 2px solid #22c55e;">🟢</div>
+                <div class="led-label">LOW</div>
+              </div>
+              <div class="led">
+                <div class="led-circle" style="background: rgba(234, 179, 8, 0.2); border: 2px solid #eab308;">🟡</div>
+                <div class="led-label">MEDIUM</div>
+              </div>
+              <div class="led">
+                <div class="led-circle" style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444;">🔴</div>
+                <div class="led-label">HIGH</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera Status -->
+          <div class="status-box">
+            <div class="status-box-title">📷 Camera Status</div>
+            <div class="status-row">
+              <span class="status-label">Status</span>
+              <span class="status-value">• Active</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Last Detection</span>
+              <span class="status-value" id="lastDetection">—</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Session Potholes</span>
+              <span class="status-value" id="sessionPotholes">0</span>
+            </div>
+          </div>
+
+          <!-- Session Info -->
+          <div class="status-box">
+            <div class="status-box-title">📊 Session Info</div>
+            <div class="status-row">
+              <span class="status-label">Vehicle</span>
+              <span class="status-value" id="displayVehicle">—</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Route</span>
+              <span class="status-value" id="displayRoute">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Detections -->
+      <div class="detections-section">
+        <h2 class="section-title">🚨 Recent Detections</h2>
+        <div id="detectionsList" style="max-height: 600px; overflow-y: auto;">
+          <div style="color:#64748b; text-align:center; padding:40px;">
+            Start an inspection session to see detections
+          </div>
+        </div>
+      </div>
+
+      <!-- Welcome Message -->
+      <div class="welcome-message">
+        <div class="welcome-message-icon">✅</div>
+        <div class="welcome-message-text">
+          <strong>Ready to start!</strong>
+          <p>Select a vehicle, choose a route, and click Start Inspection to begin your road survey.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let driverData = null;
+    let sessionActive = false;
+
+    // Load driver info
+    async function loadDashboard() {
+      try {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('dashboard').style.display = 'none';
+
+        const response = await fetch('/api/me');
+        if (!response.ok) throw new Error('Not authenticated');
+
+        const data = await response.json();
+
+        if (data.role !== 'driver' || !data.driver_name) {
+          throw new Error('Not a driver user');
+        }
+
+        driverData = data;
+        displayDashboard();
+      } catch (err) {
+        console.error('Error loading dashboard:', err);
+        document.getElementById('error').innerHTML = '❌ ' + err.message + '<br>Please <a href="/login" style="color: #60a5fa;">login again</a>';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    // Display dashboard
+    function displayDashboard() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      // Set driver name in welcome
+      document.getElementById('driver-name').textContent = driverData.driver_name;
+      updateSessionTimestamp();
+
+      // Populate vehicle selector
+      const vehicleSelector = document.getElementById('vehicleSelector');
+      vehicleSelector.innerHTML = '<option>Select Vehicle...</option>';
+      if (driverData.vehicles && driverData.vehicles.length > 0) {
+        driverData.vehicles.forEach(v => {
+          const option = document.createElement('option');
+          option.value = v;
+          option.textContent = v;
+          vehicleSelector.appendChild(option);
+        });
+        vehicleSelector.value = driverData.vehicles[0];
+        document.getElementById('displayVehicle').textContent = driverData.vehicles[0];
+      }
+
+      // Populate route selector
+      const routeSelector = document.getElementById('routeSelector');
+      routeSelector.innerHTML = '<option>Select Route...</option>';
+      if (driverData.routes && driverData.routes.length > 0) {
+        driverData.routes.forEach(r => {
+          const option = document.createElement('option');
+          option.value = r;
+          option.textContent = r;
+          routeSelector.appendChild(option);
+        });
+        routeSelector.value = driverData.routes[0];
+        document.getElementById('displayRoute').textContent = driverData.routes[0];
+      }
+
+      loadRecentDetections();
+    }
+
+    function updateSessionTimestamp() {
+      const now = new Date();
+      const timeStr = now.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      document.getElementById('session-timestamp').textContent = timeStr;
+    }
+
+    // Start inspection session
+    async function startSession() {
+      const vehicle = document.getElementById('vehicleSelector').value;
+      const route = document.getElementById('routeSelector').value;
+
+      if (vehicle === 'Select Vehicle...' || route === 'Select Route...') {
+        alert('Please select both vehicle and route');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/session/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vehicle_id: vehicle, route: route })
+        });
+
+        const data = await response.json();
+        sessionActive = true;
+
+        document.getElementById('displayVehicle').textContent = vehicle;
+        document.getElementById('displayRoute').textContent = route;
+        document.getElementById('sessionStatusText').innerHTML = '✅ <span style="color: #22c55e;">Inspection active</span>';
+        document.getElementById('feedStatusText').textContent = 'Live feed active - watching for potholes...';
+        
+        loadRecentDetections();
+      } catch (err) {
+        console.error('Error starting session:', err);
+        alert('Failed to start session');
+      }
+    }
+
+    // Stop inspection session
+    async function stopSession() {
+      try {
+        await fetch('/api/session/end', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        sessionActive = false;
+        document.getElementById('sessionStatusText').innerHTML = '<span style="color: #64748b;">No active session</span>';
+        document.getElementById('feedStatusText').textContent = 'Session ended';
+      } catch (err) {
+        console.error('Error stopping session:', err);
+      }
+    }
+
+    // Load recent detections
+    async function loadRecentDetections() {
+      try {
+        const response = await fetch('/api/detections?limit=10');
+        if (!response.ok) throw new Error('Failed to load detections');
+        
+        const detections = await response.json();
+        const listContainer = document.getElementById('detectionsList');
+        
+        let totalCount = 0, highCount = 0, mediumCount = 0, lowCount = 0;
+        
+        detections.forEach(d => {
+          const sev = d.severity?.toLowerCase() || 'low';
+          if (sev === 'high') highCount++;
+          else if (sev === 'medium') mediumCount++;
+          else lowCount++;
+          totalCount++;
+        });
+
+        document.getElementById('stat-total').textContent = totalCount;
+        document.getElementById('stat-high').textContent = highCount;
+        document.getElementById('stat-medium').textContent = mediumCount;
+        document.getElementById('stat-low').textContent = lowCount;
+        document.getElementById('sessionPotholes').textContent = totalCount;
+        
+        if (detections.length === 0) {
+          listContainer.innerHTML = '<div style="color:#64748b; text-align:center; padding:40px;">No detections yet. Start an inspection to see detections.</div>';
+          return;
+        }
+        
+        listContainer.innerHTML = detections.map(d => `
+          <div class="detection-item ${d.severity?.toLowerCase() || 'low'}">
+            <div class="detection-info">
+              <div class="detection-header">
+                <span class="detection-severity ${d.severity?.toLowerCase() || 'low'}">${d.severity || 'Unknown'}</span>
+                <span style="color:#64748b; font-size:0.85rem;">${new Date(d.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div class="detection-details">
+                <div class="detection-detail-item">
+                  <span class="detection-detail-label">Confidence:</span>
+                  <span class="detection-detail-value">${(d.confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div class="detection-detail-item">
+                  <span class="detection-detail-label">Area:</span>
+                  <span class="detection-detail-value">${d.bbox_area?.toFixed(0) || d.area?.toFixed(0) || '—'} px²</span>
+                </div>
+                <div class="detection-detail-item">
+                  <span class="detection-detail-label">Location:</span>
+                  <span class="detection-detail-value">${d.location || 'GPS unavailable'}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              ${d.photo ? `<button class="detection-btn" onclick="viewDetectionPhoto('${d.photo}')">📷 View</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Error loading detections:', err);
+      }
+    }
+
+    function viewDetectionPhoto(photoPath) {
+      if (!photoPath) {
+        alert('Photo not available');
+        return;
+      }
+      window.open(`/snapshot/${photoPath.split('/').pop()}`, '_blank');
+    }
+
+    function viewRoadVision() {
+      window.location.href = '/road_vision';
+    }
+
+    function goToMunicipal() {
+      window.location.href = '/municipal';
+    }
+
+    function logout() {
+      window.location.href = '/logout';
+    }
+
+    // Socket.IO events
+    socket.on('detection', (data) => {
+      if (sessionActive) {
+        loadRecentDetections();
+      }
+    });
+
+    // Update timestamp every minute
+    setInterval(updateSessionTimestamp, 60000);
+
+    // Initialize on load
+    window.addEventListener('load', loadDashboard);
+  </script>
+</body>
+</html>

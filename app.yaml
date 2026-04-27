@@ -1,0 +1,49 @@
+# app.yaml - Cloud Run Service Configuration
+# Deploy with: gcloud run deploy --source . --region us-central1
+
+runtime: python311
+
+# Cloud Run entrypoint
+entrypoint: gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --threads 4 --worker-class gthread web.app:app
+
+env_vars:
+  # Environment
+  FLASK_ENV: "production"
+  
+  # Camera (disabled in cloud - use on-premise detection)
+  VIDEO_MODE: "disabled"
+  
+  # Database
+  DB_PATH: "/tmp/iris.db"
+  
+  # Snapshots (temporary - use Cloud Storage in production)
+  SNAPSHOTS_DIR: "/tmp/snapshots"
+
+# Service configuration
+service: iris
+
+# Region
+region: us-central1
+
+# Resource configuration
+resources:
+  memory_mb: 2048
+  cpu_throttling: true
+
+# Networking
+network:
+  vpc_connector: iris-vpc
+  
+# Cloud Run specific settings
+service_account: iris-sa@PROJECT_ID.iam.gserviceaccount.com
+
+# Auto-scaling
+min_instances: 1
+max_instances: 10
+timeout: 3600
+
+# Health check
+liveness_check:
+  initial_delay_sec: 40
+  check_interval_sec: 30
+  timeout_sec: 10

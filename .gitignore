@@ -1,0 +1,25 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database (contains personal data)
+iris.db
+driver_biometrics.pkl
+database/driver_biometrics.pkl
+firestore-key.json
+
+# Snapshots (too large for GitHub)
+snapshots/
+
+# Generated files
+IRIS_Report.pdf
+biometric_config.py
+*.tmp
+
+# Model weights (too large — 6MB+, use Git LFS or share separately)
+models/best.pt
+
+# Environment
+.env
+venv/
