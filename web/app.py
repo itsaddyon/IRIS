@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import numpy as np
 import cv2
+import face_recognition
 from flask import (Flask, render_template, jsonify, Response,
                    send_file, abort, request,
                    session as flask_session, redirect)
@@ -443,6 +444,20 @@ def api_vehicles_and_routes():
         'routes': routes
     })
 
+@app.route('/api/biometric-stats')
+def api_biometric_stats():
+    """Get biometric enrollment statistics"""
+    try:
+        from biometric_auth import get_biometric_engine
+        engine = get_biometric_engine()
+        return jsonify({
+            'enrolled_count': len(engine.known_face_encodings),
+            'known_drivers': [{'id': did, 'name': name} for did, name in engine.known_face_ids]
+        })
+    except Exception as e:
+        print(f"[API] Error getting biometric stats: {e}")
+        return jsonify({'enrolled_count': 0, 'known_drivers': [], 'error': str(e)}), 500
+
 # ── SocketIO events ────────────────────────────────────────────────────────────
 @socketio.on('biometric:capture_face')
 def on_capture_face(data, callback=None):
@@ -463,34 +478,43 @@ def on_capture_face(data, callback=None):
         
         # Get frame data from client (base64 encoded JPEG)
         frame_data = data.get('frame')
-        if not frame_data:
-            print("[BIOMETRIC] ❌ No frame data provided")
-            return send_response({'success': False, 'error': 'No frame data provided'})
         
-        # Decode base64 frame
-        try:
-            # Remove data URL prefix if present
-            if frame_data.startswith('data:image'):
-                frame_data = frame_data.split(',')[1]
-            
-            # Decode base64 to bytes
-            frame_bytes = base64.b64decode(frame_data)
-            print(f"[BIOMETRIC] Frame decoded: {len(frame_bytes)} bytes")
-            
-            # Convert to PIL Image then to numpy array
-            pil_image = Image.open(io.BytesIO(frame_bytes))
-            frame_array = np.array(pil_image)
-            print(f"[BIOMETRIC] Frame shape: {frame_array.shape}")
-            
-            # PIL uses RGB, face_recognition expects RGB too
-            if len(frame_array.shape) == 3 and frame_array.shape[2] == 3:
-                rgb_frame = frame_array
-            else:
-                rgb_frame = cv2.cvtColor(frame_array, cv2.COLOR_BGR2RGB)
+        if not frame_data:
+            print("[BIOMETRIC] No frame provided by client, attempting to use server-side frame buffer...")
+            with _frame_lock:
+                if _latest_frame is not None:
+                    # _latest_frame is a numpy array (BGR from OpenCV)
+                    # Convert BGR to RGB for face_recognition
+                    rgb_frame = cv2.cvtColor(_latest_frame, cv2.COLOR_BGR2RGB)
+                    print("[BIOMETRIC] ✓ Using server-side frame buffer")
+                else:
+                    print("[BIOMETRIC] ❌ No server-side frame available")
+                    return send_response({'success': False, 'error': 'No frame data provided and server camera not ready.'})
+        else:
+            # Decode base64 frame
+            try:
+                # Remove data URL prefix if present
+                if frame_data.startswith('data:image'):
+                    frame_data = frame_data.split(',')[1]
                 
-        except Exception as decode_err:
-            print(f"[BIOMETRIC] ❌ Failed to decode frame: {decode_err}")
-            return send_response({'success': False, 'error': f'Failed to decode frame: {str(decode_err)}'})
+                # Decode base64 to bytes
+                frame_bytes = base64.b64decode(frame_data)
+                print(f"[BIOMETRIC] Frame decoded: {len(frame_bytes)} bytes")
+                
+                # Convert to PIL Image then to numpy array
+                pil_image = Image.open(io.BytesIO(frame_bytes))
+                frame_array = np.array(pil_image)
+                print(f"[BIOMETRIC] Frame shape: {frame_array.shape}")
+                
+                # PIL uses RGB, face_recognition expects RGB too
+                if len(frame_array.shape) == 3 and frame_array.shape[2] == 3:
+                    rgb_frame = frame_array
+                else:
+                    rgb_frame = cv2.cvtColor(frame_array, cv2.COLOR_BGR2RGB)
+                    
+            except Exception as decode_err:
+                print(f"[BIOMETRIC] ❌ Failed to decode frame: {decode_err}")
+                return send_response({'success': False, 'error': f'Failed to decode frame: {str(decode_err)}'})
         
         # Detect faces
         print("[BIOMETRIC] Detecting faces...")
@@ -535,35 +559,93 @@ def on_capture_face(data, callback=None):
 
 @socketio.on('biometric:recognize')
 def on_recognize(data, callback=None):
-    """Recognize driver from face encoding"""
+    """Recognize driver from face encoding(s) — supports multi-frame median voting."""
     def send_response(response):
         if callback:
             callback(response)
         return response
-    
+
     try:
         from biometric_auth import get_biometric_engine
 
-        encoding = np.array(data.get('encoding') or [], dtype=np.float64)
-        if encoding.size != 128:
+        # Accept either a single encoding or a list of encodings (multi-frame)
+        raw_encodings = data.get('encodings') or (
+            [data.get('encoding')] if data.get('encoding') else []
+        )
+
+        if not raw_encodings:
+            return send_response({'success': False, 'error': 'No encoding provided'})
+
+        # Validate each and collect valid 128-d vectors
+        valid_encodings = []
+        for raw in raw_encodings:
+            enc = np.array(raw, dtype=np.float64)
+            if enc.size == 128:
+                valid_encodings.append(enc)
+
+        if not valid_encodings:
             return send_response({'success': False, 'error': 'Invalid face encoding'})
 
         engine = get_biometric_engine()
-        driver = engine.recognize_driver(encoding)
+
+        if len(valid_encodings) == 1:
+            # Single frame — standard path
+            driver = engine.recognize_driver(valid_encodings[0])
+        else:
+            # Multi-frame median voting ─────────────────────────────────────
+            # For each known face, compute distance to every submitted encoding.
+            # Take the MEDIAN distance per candidate (robust to outlier frames).
+            # Then run recognition on the synthetic "median" result.
+            if len(engine.known_face_encodings) == 0:
+                return send_response({'success': False, 'driver': None})
+
+            # Shape: (num_known, num_frames)
+            dist_matrix = np.array([
+                face_recognition.face_distance(engine.known_face_encodings, enc)
+                for enc in valid_encodings
+            ]).T   # → (num_known, num_frames)
+
+            median_dists = np.median(dist_matrix, axis=1)
+            best_idx     = int(np.argmin(median_dists))
+            best_dist    = float(median_dists[best_idx])
+            confidence   = 1.0 - best_dist
+
+            print(f"[BIOMETRIC] Multi-frame ({len(valid_encodings)} frames) "
+                  f"median distance: {best_dist:.4f}  confidence: {confidence:.1%}")
+
+            # Apply same gates as recognize_driver
+            tolerance = 0.45
+            if best_dist >= tolerance:
+                print(f"[BIOMETRIC] ❌ Rejected — median distance {best_dist:.4f} ≥ {tolerance}")
+                driver = None
+            elif len(engine.known_face_encodings) == 1 and best_dist > 0.45:
+                print(f"[BIOMETRIC] ❌ Rejected (single-driver gate) — {best_dist:.4f} > 0.45")
+                driver = None
+            elif len(engine.known_face_encodings) > 1:
+                sorted_dists = np.sort(median_dists)
+                gap = float(sorted_dists[1] - sorted_dists[0])
+                if gap < 0.06:
+                    print(f"[BIOMETRIC] ❌ Rejected — ambiguous (gap {gap:.4f} < 0.06)")
+                    driver = None
+                else:
+                    driver_id, name = engine.known_face_ids[best_idx]
+                    driver = {'driver_id': driver_id, 'name': name, 'confidence': confidence}
+            else:
+                driver_id, name = engine.known_face_ids[best_idx]
+                driver = {'driver_id': driver_id, 'name': name, 'confidence': confidence}
+
         if not driver:
-            return send_response({'success': False, 'driver': None})
+            return send_response({'success': False, 'driver': None,
+                'message': 'Face not recognised. Please try again in better lighting.'})
 
         assignments = engine.get_driver_vehicles(driver['driver_id'])
-        vehicle_id = (assignments.get('vehicles') or [None])[0]
-        
-        # Set session data
-        flask_session['role'] = 'driver'
-        flask_session['driver_id'] = driver['driver_id']
+        vehicle_id  = (assignments.get('vehicles') or [None])[0]
+
+        flask_session['role']        = 'driver'
+        flask_session['driver_id']   = driver['driver_id']
         flask_session['driver_name'] = driver['name']
         if vehicle_id:
             flask_session['vehicle_id'] = vehicle_id
-        
-        # Explicitly mark session as modified to ensure it's saved
         flask_session.modified = True
 
         return send_response({
@@ -575,6 +657,9 @@ def on_recognize(data, callback=None):
             }
         })
     except Exception as e:
+        import traceback
+        print(f"[BIOMETRIC] EXCEPTION in recognize: {e}")
+        traceback.print_exc()
         return send_response({'success': False, 'error': str(e)})
 
 @socketio.on('biometric:enroll_driver')
@@ -584,14 +669,21 @@ def on_enroll_driver(data, callback=None):
         if callback:
             callback(response)
         return response
-    
     try:
         from biometric_auth import get_biometric_engine
+        
+        print(f"[BIOMETRIC] on_enroll_driver called with data keys: {data.keys() if isinstance(data, dict) else type(data)}")
         
         name = (data.get('name') or 'Unknown Driver').strip()
         vehicles = data.get('vehicles', [])
         routes = data.get('routes', [])
-        face_encoding = np.array(data.get('face_encoding') or [], dtype=np.float64)
+        raw_encoding = data.get('face_encoding')
+        
+        print(f"[BIOMETRIC] Enrollment data: name={name}, vehicles={vehicles}, routes={routes}")
+        print(f"[BIOMETRIC] Raw encoding type: {type(raw_encoding)}, value preview: {str(raw_encoding)[:100] if raw_encoding else 'None'}")
+        
+        face_encoding = np.array(raw_encoding or [], dtype=np.float64)
+        print(f"[BIOMETRIC] Encoded array: shape={face_encoding.shape}, size={face_encoding.size}")
 
         if not name:
             return send_response({'success': False, 'error': 'Driver name is required'})
@@ -621,6 +713,9 @@ def on_enroll_driver(data, callback=None):
         })
         
     except Exception as e:
+        import traceback
+        print(f"[BIOMETRIC] EXCEPTION in enroll_driver: {e}")
+        traceback.print_exc()
         return send_response({'success': False, 'error': str(e)})
 
 # ── WebSocket: Real-time Frame Streaming ──────────────────────────────────────

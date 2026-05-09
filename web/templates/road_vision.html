@@ -757,9 +757,9 @@ socket.on('detection', function(data) {
 });
 
 // ── Demo fallback when no live session/detections are available ───────────
-setTimeout(async () => {
-  const status = await fetch('/api/session/status').then(r => r.json()).catch(() => ({ active: false }));
-  if (status.active || totalAll > 0) return;
+setTimeout(() => {
+  if (totalAll > 0) return; // Don't run demo if we already have real data
+  console.log('[DEMO] Starting simulated road vision...');
   const demos = [
     {severity:'High',   confidence:0.91, location:'27.1767,78.0081', timestamp:'Demo'},
     {severity:'Medium', confidence:0.74, location:'27.1771,78.0089', timestamp:'Demo'},

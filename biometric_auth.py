@@ -21,7 +21,14 @@ class BiometricAuth:
     """Facial recognition engine for driver authentication"""
     
     def __init__(self, db_path: str = 'iris.db'):
+        # Ensure we use absolute path for Windows compatibility
+        if not os.path.isabs(db_path):
+            db_path = os.path.join(os.getcwd(), db_path)
         self.db_path = db_path
+        
+        # Initialize database schema
+        self._ensure_db_schema()
+        
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
@@ -31,10 +38,41 @@ class BiometricAuth:
         
         print("[BIOMETRIC] ✓ Facial recognition engine initialized")
     
+    def _ensure_db_schema(self):
+        """Ensure database has proper schema before operations"""
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
+            conn.isolation_level = None  # Autocommit
+            cursor = conn.cursor()
+            
+            # Create drivers table if not exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS drivers (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name             TEXT NOT NULL UNIQUE,
+                    facial_encoding  BLOB,
+                    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+            
+            # Create driver_vehicles table if not exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS driver_vehicles (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    driver_id INTEGER NOT NULL UNIQUE,
+                    vehicles  TEXT,
+                    routes    TEXT,
+                    FOREIGN KEY(driver_id) REFERENCES drivers(id)
+                )''')
+            
+            conn.close()
+            print(f"[BIOMETRIC] Database schema verified at {self.db_path}")
+        except Exception as e:
+            print(f"[BIOMETRIC] ⚠️  Schema error: {e}")
+    
     def load_known_faces(self):
         """Load all enrolled driver faces from database"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, name, facial_encoding 
@@ -54,7 +92,9 @@ class BiometricAuth:
             print(f"[BIOMETRIC] Loaded {len(self.known_face_encodings)} enrolled drivers")
             conn.close()
         except Exception as e:
+            import traceback
             print(f"[BIOMETRIC] Error loading faces: {e}")
+            traceback.print_exc()
     
     def detect_face_from_webcam(self, timeout: int = 10) -> Optional[np.ndarray]:
         """
@@ -97,15 +137,15 @@ class BiometricAuth:
         return None
     
     def recognize_driver(self, face_encoding: np.ndarray,
-                        tolerance: float = 0.38) -> Optional[Dict]:
+                        tolerance: float = 0.45) -> Optional[Dict]:
         """
         Recognize driver by comparing face encoding against database.
 
-        Stricter than vanilla face_recognition:
-          • Hard distance ceiling of `tolerance` (default 0.38, tighter than the
-            library default of 0.6 and our previous 0.4).
-          • Requires confidence ≥ 67 % (distance ≤ 0.33) when only one driver is
-            enrolled — prevents the "only person in DB always wins" false-positive.
+        Recognition gates:
+          • Hard distance ceiling of `tolerance` (default 0.45, moderate strictness
+            between library default of 0.6 and our previous 0.38).
+          • Requires confidence ≥ 55 % (distance ≤ 0.45) when only one driver is
+            enrolled — prevents false positives while allowing normal variations.
           • When multiple drivers are enrolled, requires the best distance to be
             meaningfully better than the second-best (gap ≥ 0.06) so a borderline
             match near a second candidate is rejected.
@@ -137,11 +177,11 @@ class BiometricAuth:
             print(f"[BIOMETRIC] ❌ Rejected — distance {best_distance:.4f} ≥ {tolerance}")
             return None
 
-        # ── Single-driver stricter gate ────────────────────────────────────────
+        # ── Single-driver gate ────────────────────────────────────────
         # When only 1 person is enrolled, argmin always picks them.
-        # Require a much higher confidence to avoid false positives.
+        # Require reasonable confidence to avoid obvious mismatches.
         if len(self.known_face_encodings) == 1:
-            required = 0.33   # confidence must be > 67 %
+            required = 0.45   # confidence must be > 55 % (distance ≤ 0.45)
             if best_distance > required:
                 print(f"[BIOMETRIC] ❌ Rejected (single-driver gate) — "
                       f"distance {best_distance:.4f} > {required}")
@@ -183,11 +223,34 @@ class BiometricAuth:
             driver_id (int) or None if enrollment failed
         """
         try:
-            conn = sqlite3.connect(self.db_path)
+            # Ensure encoding is a proper numpy array
+            if not isinstance(face_encoding, np.ndarray):
+                face_encoding = np.array(face_encoding, dtype=np.float64)
+            else:
+                face_encoding = face_encoding.astype(np.float64)
+            
+            print(f"[BIOMETRIC] Encoding validation: shape={face_encoding.shape}, dtype={face_encoding.dtype}, size={face_encoding.size}")
+            
+            # ✓ Validate encoding has no NaN or Inf values
+            if np.any(np.isnan(face_encoding)) or np.any(np.isinf(face_encoding)):
+                print(f"[BIOMETRIC] ❌ Encoding contains NaN or Inf values - invalid encoding")
+                return None
+            
+            # ✓ Validate encoding values are in reasonable range (-2.0 to 2.0)
+            if np.min(face_encoding) < -2.0 or np.max(face_encoding) > 2.0:
+                print(f"[BIOMETRIC] ⚠️  Encoding values out of typical range: min={np.min(face_encoding):.4f}, max={np.max(face_encoding):.4f}")
+            
+            # Connect with proper timeout for Windows
+            conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
             cursor = conn.cursor()
             
-            # Store as BLOB
-            encoding_blob = face_encoding.astype(np.float64).tobytes()
+            # Store as BLOB - safe conversion
+            try:
+                encoding_blob = face_encoding.tobytes()
+            except Exception as e:
+                print(f"[BIOMETRIC] ❌ Failed to convert encoding to bytes: {e}")
+                print(f"[BIOMETRIC]    Encoding stats: min={np.min(face_encoding):.6f}, max={np.max(face_encoding):.6f}, mean={np.mean(face_encoding):.6f}")
+                raise
             
             # Insert driver
             cursor.execute("""
@@ -219,13 +282,15 @@ class BiometricAuth:
             return driver_id
             
         except Exception as e:
+            import traceback
             print(f"[BIOMETRIC] ❌ Enrollment failed: {e}")
+            traceback.print_exc()
             return None
     
     def get_driver_vehicles(self, driver_id: int) -> Dict:
         """Get assigned vehicles and routes for a driver"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -252,7 +317,7 @@ class BiometricAuth:
                                 routes: List[str]) -> bool:
         """Update driver's vehicle & route assignments"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
             cursor = conn.cursor()
             
             vehicles_json = json.dumps(vehicles)

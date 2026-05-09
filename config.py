@@ -15,7 +15,7 @@ VIDEO_PATH = 'demo.mp4'
 #    - Quality: 50% (balance speed vs quality)
 #    - FPS limit: 15 (enough for detection, reduces WiFi load)
 # 4. Tap 'Start server' → note IP shown → update below
-VIDEO_IP = 'http://172.168.27.85:8080/video'
+VIDEO_IP = 'http://172.168.29.3:8080/video'
 
 # ─── Model ───────────────────────────────────────────────
 MODEL_PATH = os.path.join('models', 'best.pt')

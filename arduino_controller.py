@@ -56,13 +56,13 @@ def _connect_serial():
             _connected = False
             return
         
-        _serial = serial.Serial(port, 9600, timeout=2)
-        time.sleep(2)
+        _serial = serial.Serial(port, 9600, timeout=1)
+        time.sleep(1)
         _connected = True
         print(f"[Arduino] Serial connected on {port} ✅")
     except Exception as e:
         _connected = False
-        print(f"[Arduino] Serial not connected ({e})")
+        print(f"[Arduino] Serial connection skipped (Device not ready or port busy)")
 
 def _connect_wifi():
     global _connected

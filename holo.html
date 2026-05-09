@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Holo-Scan Ultra</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+        #ui {
+            position: absolute; top: 30px; left: 30px; color: #00f2ff;
+            z-index: 10; text-shadow: 0 0 15px #00f2ff; pointer-events: none;
+        }
+        .loading-screen {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: #00f2ff;
+            background: black; z-index: 100; text-transform: uppercase; letter-spacing: 4px;
+        }
+        video { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="loader" class="loading-screen">
+        <div style="font-size: 24px;" id="load-text">ESTABLISHING NEURAL LINK...</div>
+        <div style="font-size: 10px; margin-top: 10px; opacity: 0.5;">Please "Allow" Camera Access</div>
+    </div>
+
+    <div id="ui">
+        <h1 style="margin:0; font-size: 1.2rem;">RECON_MODE: LIVE_POINTCLOUD</h1>
+        <div id="status">INIT_SEARCH...</div>
+    </div>
+    
+    <video id="video" playsinline></video>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        const videoElement = document.getElementById('video');
+        const loader = document.getElementById('loader');
+        const status = document.getElementById('status');
+        const loadText = document.getElementById('load-text');
+
+        // --- SCENE & RENDERER ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- THE "REALISTIC" GLOW ---
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0;
+        bloomPass.strength = 1.5; 
+        bloomPass.radius = 1.0;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- POINT CLOUD ---
+        const geometry = new THREE.BufferGeometry();
+        const posArray = new Float32Array(468 * 3); 
+        geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x00f2ff,
+            size: 0.015,
+            transparent: true,
+            opacity: 1,
+            blending: THREE.AdditiveBlending
+        });
+
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+        camera.position.z = 2.5;
+
+        // --- STABLE FACE TRACKING ---
+        const faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults((results) => {
+            loader.style.display = 'none';
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                status.innerText = "SUBJECT_LOCKED: ACTIVE_FEED";
+                const landmarks = results.multiFaceLandmarks[0];
+                const positions = points.geometry.attributes.position.array;
+
+                for (let i = 0; i < landmarks.length; i++) {
+                    // Mirror mapping
+                    positions[i * 3] = (landmarks[i].x - 0.5) * -2.5; 
+                    positions[i * 3 + 1] = (landmarks[i].y - 0.5) * -2.5;
+                    positions[i * 3 + 2] = landmarks[i].z * -1.5;
+                }
+                points.geometry.attributes.position.needsUpdate = true;
+            } else {
+                status.innerText = "SCANNING_AREA...";
+            }
+        });
+
+        // Error Handling
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => { 
+                try {
+                    await faceMesh.send({image: videoElement}); 
+                } catch (e) {
+                    loadText.innerText = "ENGINE ERROR: RESTARTING...";
+                }
+            },
+            width: 640, height: 480
+        });
+
+        cameraUtils.start().catch(() => {
+            loadText.innerText = "CAMERA ACCESS DENIED";
+            loadText.style.color = "red";
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // Realistic "Holo-Flicker"
+            material.opacity = 0.5 + Math.random() * 0.5;
+            composer.render();
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
