@@ -204,7 +204,7 @@ def detection_loop():
                 sm.session.record(severity)
                 insert_detection(ts, severity, confidence,
                                  bbox, photo_path, location,
-                                 sm.session.session_id)
+                                 sm.session.session_id, ai_analysis)
 
                 emit_data = {
                     'timestamp':  ts,

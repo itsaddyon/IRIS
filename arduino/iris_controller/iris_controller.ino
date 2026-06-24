@@ -30,8 +30,8 @@ unsigned long alert_start_time = 0;
 unsigned long alert_duration = 0;
 
 const unsigned int LOW_BEEP_FREQ = 700;
-const unsigned int MEDIUM_BEEP_FREQ = 1200;
-const unsigned int HIGH_BEEP_FREQ = 2200;
+const unsigned int MEDIUM_BEEP_FREQ = 2000;
+const unsigned int HIGH_BEEP_FREQ = 1200;
 
 const unsigned long LOW_BEEP_MS = 180;
 const unsigned long MEDIUM_BEEP_MS = 450;

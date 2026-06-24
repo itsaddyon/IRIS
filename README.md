@@ -1,4 +1,4 @@
-# 🚧 IRIS — Intelligent Road Infrastructure System
+# 🚧 IRIS — Intelligent Road Inspection System
 **Team Grey Hats | Technomax 2026 | First Prize: ₹5,100**
 
 IRIS is an **AI-powered, cloud-enabled pothole detection and municipal alert system** with **biometric driver authentication**. 

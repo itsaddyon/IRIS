@@ -56,9 +56,18 @@ def init_db():
         )''')
     
     existing = [r[1] for r in c.execute("PRAGMA table_info(detections)")]
-    for col, defval in [('approved','0'),('declined','0'),('session_id',"''"),('driver_id', 'NULL')]:
+    for col, defval in [
+        ('approved','0'),
+        ('declined','0'),
+        ('session_id',"''"),
+        ('driver_id', 'NULL'),
+        ('ai_analysis', 'NULL'),
+        ('recommended_action', 'NULL'),
+        ('impact_estimate', 'NULL'),
+        ('priority', 'NULL')
+    ]:
         if col not in existing:
-            col_type = 'INTEGER' if col == 'driver_id' else ('INTEGER DEFAULT '+defval if col!='session_id' else 'TEXT')
+            col_type = 'INTEGER' if col in ('driver_id', 'priority') else ('INTEGER DEFAULT '+defval if col in ('approved','declined') else 'TEXT')
             c.execute(f"ALTER TABLE detections ADD COLUMN {col} {col_type}")
             print(f"[IRIS] DB migrated: added '{col}' to detections")
     
@@ -87,12 +96,26 @@ def init_db():
     conn.close()
 
 def insert_detection(timestamp, severity, confidence, bbox,
-                     photo_path, location, session_id=None):
+                     photo_path, location, session_id=None, ai_analysis=None):
     conn = sqlite3.connect(config.DB_PATH)
+    
+    # Extract AI fields if provided
+    ai_text = None
+    rec_action = None
+    impact = None
+    priority = None
+    if ai_analysis:
+        ai_text = ai_analysis.get('ai_analysis')
+        rec_action = ai_analysis.get('recommended_action')
+        impact = ai_analysis.get('impact_estimate')
+        priority = ai_analysis.get('priority')
+
     conn.execute('''INSERT INTO detections
-                 (session_id,timestamp,severity,confidence,bbox,photo_path,location)
-                 VALUES (?,?,?,?,?,?,?)''',
-                 (session_id,timestamp,severity,confidence,str(bbox),photo_path,location))
+                 (session_id,timestamp,severity,confidence,bbox,photo_path,location,
+                  ai_analysis, recommended_action, impact_estimate, priority)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                 (session_id,timestamp,severity,confidence,str(bbox),photo_path,location,
+                  ai_text, rec_action, impact, priority))
     conn.commit(); conn.close()
 
 def get_recent_detections(limit=50):
@@ -170,7 +193,8 @@ def get_high_detections_by_vehicle(vehicle_id=None):
     if vehicle_id:
         c.execute('''SELECT d.id, d.session_id, COALESCE(s.vehicle_id,'Unknown'),
                             d.timestamp, d.severity, d.confidence, d.bbox,
-                            d.photo_path, d.location, d.approved, d.declined
+                            d.photo_path, d.location, d.approved, d.declined,
+                            d.ai_analysis, d.recommended_action, d.impact_estimate, d.priority
                      FROM detections d
                      LEFT JOIN sessions s ON d.session_id = s.session_id
                      WHERE d.severity=? AND d.approved=0 AND d.declined=0
@@ -179,7 +203,8 @@ def get_high_detections_by_vehicle(vehicle_id=None):
     else:
         c.execute('''SELECT d.id, d.session_id, COALESCE(s.vehicle_id,'Unknown'),
                             d.timestamp, d.severity, d.confidence, d.bbox,
-                            d.photo_path, d.location, d.approved, d.declined
+                            d.photo_path, d.location, d.approved, d.declined,
+                            d.ai_analysis, d.recommended_action, d.impact_estimate, d.priority
                      FROM detections d
                      LEFT JOIN sessions s ON d.session_id = s.session_id
                      WHERE d.severity=? AND d.approved=0 AND d.declined=0
@@ -187,44 +212,47 @@ def get_high_detections_by_vehicle(vehicle_id=None):
     rows = c.fetchall(); conn.close()
     return [{'id':r[0],'session_id':r[1],'vehicle_id':r[2],'timestamp':r[3],
              'severity':r[4],'confidence':r[5],'bbox':r[6],'photo_path':r[7],
-             'location':r[8],'approved':r[9],'declined':r[10]} for r in rows]
+             'location':r[8],'approved':r[9],'declined':r[10],
+             'ai_analysis':r[11],'recommended_action':r[12],'impact_estimate':r[13],'priority':r[14]} for r in rows]
 
 def get_approved_detections():
     conn = sqlite3.connect(config.DB_PATH)
     c = conn.cursor()
-    c.execute('''SELECT d.id, d.timestamp, d.confidence, d.photo_path, d.location,
+    c.execute('''SELECT d.id, d.timestamp, d.severity, d.confidence, d.photo_path, d.location,
                         COALESCE(s.vehicle_id,'Unknown')
                  FROM detections d
                  LEFT JOIN sessions s ON d.session_id = s.session_id
-                 WHERE d.severity=? AND d.approved=1
-                 ORDER BY d.id DESC''', ('High',))
+                 WHERE d.approved=1
+                 ORDER BY d.id DESC''')
     rows = c.fetchall(); conn.close()
-    return [{'id':r[0],'timestamp':r[1],'confidence':r[2],
-             'photo_path':r[3],'location':r[4],'vehicle_id':r[5]} for r in rows]
+    return [{'id':r[0],'timestamp':r[1],'severity':r[2],'confidence':r[3],
+             'photo_path':r[4],'location':r[5],'vehicle_id':r[6]} for r in rows]
 
 def get_declined_detections():
     conn = sqlite3.connect(config.DB_PATH)
     c = conn.cursor()
-    c.execute('''SELECT d.id, d.timestamp, d.confidence, d.photo_path, d.location,
+    c.execute('''SELECT d.id, d.timestamp, d.severity, d.confidence, d.photo_path, d.location,
                         COALESCE(s.vehicle_id,'Unknown')
                  FROM detections d
                  LEFT JOIN sessions s ON d.session_id = s.session_id
-                 WHERE d.severity=? AND d.declined=1
-                 ORDER BY d.id DESC''', ('High',))
+                 WHERE d.declined=1
+                 ORDER BY d.id DESC''')
     rows = c.fetchall(); conn.close()
-    return [{'id':r[0],'timestamp':r[1],'confidence':r[2],
-             'photo_path':r[3],'location':r[4],'vehicle_id':r[5]} for r in rows]
+    return [{'id':r[0],'timestamp':r[1],'severity':r[2],'confidence':r[3],
+             'photo_path':r[4],'location':r[5],'vehicle_id':r[6]} for r in rows]
 
 def get_session_detections(session_id):
     conn = sqlite3.connect(config.DB_PATH)
     c = conn.cursor()
     c.execute('''SELECT id,timestamp,severity,confidence,bbox,photo_path,
-                        location,approved,declined
+                        location,approved,declined,
+                        ai_analysis, recommended_action, impact_estimate, priority
                  FROM detections WHERE session_id=? ORDER BY id''', (session_id,))
     rows = c.fetchall(); conn.close()
     return [{'id':r[0],'timestamp':r[1],'severity':r[2],'confidence':r[3],
              'bbox':r[4],'photo_path':r[5],'location':r[6],
-             'approved':r[7],'declined':r[8]} for r in rows]
+             'approved':r[7],'declined':r[8],
+             'ai_analysis':r[9],'recommended_action':r[10],'impact_estimate':r[11],'priority':r[12]} for r in rows]
 
 
 # ✨ NEW: Driver biometric functions

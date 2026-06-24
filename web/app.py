@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import numpy as np
 import cv2
-import face_recognition
 from flask import (Flask, render_template, jsonify, Response,
                    send_file, abort, request,
                    session as flask_session, redirect)
@@ -66,21 +65,19 @@ def require_municipal():
     return None
 
 def require_driver():
-    """Return redirect if the caller is not an authenticated driver."""
+    """Bypass driver login wall and authenticate a default driver."""
     if not is_driver() or not flask_session.get('driver_id'):
-        return redirect('/login')
+        flask_session['role'] = 'driver'
+        flask_session['driver_id'] = 1
+        flask_session['driver_name'] = 'Ramesh Kumar'
+        flask_session['vehicle_id'] = 'MH-12-BUS-001'
+        flask_session.modified = True
     return None
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
 @app.route('/login')
 def login_page():
-    # If already authenticated, skip the login page
-    role = flask_session.get('role')
-    if role == 'driver' and flask_session.get('driver_id'):
-        return redirect('/live')
-    if role == 'municipal':
-        return redirect('/municipal')
-    return render_template('login.html')
+    return redirect('/municipal/login')
 
 @app.route('/login/municipal', methods=['POST'])
 def login_municipal():
@@ -91,20 +88,10 @@ def login_municipal():
         return jsonify({'status': 'ok', 'redirect': '/municipal'})
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
 
-@app.route('/login/driver', methods=['POST'])
-def login_driver():
-    data = request.get_json() or {}
-    vid, pin = data.get('vehicle_id', ''), data.get('pin', '')
-    if check_driver(vid, pin):
-        flask_session['role'] = 'driver'
-        flask_session['vehicle_id'] = vid
-        return jsonify({'status': 'ok', 'redirect': '/', 'vehicle_id': vid})
-    return jsonify({'status': 'error', 'message': 'Invalid vehicle ID or PIN'}), 401
-
 @app.route('/logout')
 def logout():
     flask_session.clear()
-    return redirect('/login')
+    return redirect('/live')
 
 @app.route('/api/me')
 def api_me():
@@ -114,21 +101,9 @@ def api_me():
         'driver_id':  flask_session.get('driver_id'),
         'driver_name': flask_session.get('driver_name'),
         'vehicle_id': flask_session.get('vehicle_id'),
-        'vehicles': [],
-        'routes': [],
+        'vehicles': ['MH-12-BUS-001', 'UP-80-AUTO-042', 'DL-01-TRUCK-007'],
+        'routes': ['NH-44 Agra North', 'Ring Road Agra', 'Yamuna Expressway'],
     }
-    
-    # Get vehicle and route assignments for driver
-    if driver_info.get('driver_id'):
-        try:
-            from biometric_auth import get_biometric_engine
-            engine = get_biometric_engine()
-            assignments = engine.get_driver_vehicles(driver_info['driver_id'])
-            driver_info['vehicles'] = assignments.get('vehicles', [])
-            driver_info['routes'] = assignments.get('routes', [])
-        except Exception as e:
-            print(f"[API] Error getting driver assignments: {e}")
-    
     return jsonify(driver_info)
 
 def hydrate_driver_session(driver_id, driver_name=None):
@@ -141,17 +116,7 @@ def hydrate_driver_session(driver_id, driver_name=None):
     flask_session['driver_id'] = driver_id
     if driver_name:
         flask_session['driver_name'] = driver_name
-
-    try:
-        from biometric_auth import get_biometric_engine
-        engine = get_biometric_engine()
-        assignments = engine.get_driver_vehicles(driver_id)
-        vehicle_id = (assignments.get('vehicles') or [None])[0]
-        if vehicle_id:
-            flask_session['vehicle_id'] = vehicle_id
-    except Exception as e:
-        print(f"[Auth] Error hydrating driver session: {e}")
-
+    flask_session['vehicle_id'] = 'MH-12-BUS-001'
     flask_session.modified = True
     return True
 
@@ -159,28 +124,19 @@ def hydrate_driver_session(driver_id, driver_name=None):
 @app.route('/')
 def root():
     role = flask_session.get('role')
-    if role == 'driver' and flask_session.get('driver_id'):
-        return redirect('/live')
     if role == 'municipal':
         return redirect('/municipal')
-    return redirect('/login')
+    require_driver()
+    return redirect('/live')
 
 @app.route('/dashboard')
 def dashboard():
-    query_driver_id = request.args.get('driver_id')
-    query_driver_name = request.args.get('driver_name')
-    if query_driver_id:
-        hydrate_driver_session(query_driver_id, query_driver_name)
+    require_driver()
     return redirect('/live')
 
 @app.route('/live')
 def live_dashboard():
-    query_driver_id = request.args.get('driver_id')
-    query_driver_name = request.args.get('driver_name')
-    if query_driver_id:
-        hydrate_driver_session(query_driver_id, query_driver_name)
-    if not flask_session.get('driver_id'):
-        return redirect('/login')
+    require_driver()
     return render_template('dashboard.html',
         driver_name=flask_session.get('driver_name', 'Driver'),
         vehicle_id=flask_session.get('vehicle_id', ''),
@@ -189,30 +145,53 @@ def live_dashboard():
 
 @app.route('/driver')
 def driver_dashboard():
-    # Legacy route — redirect to canonical /live
-    query_driver_id = request.args.get('driver_id')
-    query_driver_name = request.args.get('driver_name')
-    if query_driver_id:
-        hydrate_driver_session(query_driver_id, query_driver_name)
+    require_driver()
     return redirect('/live')
 
 @app.route('/municipal')
 def municipal():
     if not is_municipal():
-        return redirect('/login')
+        return redirect('/municipal/login')
     return render_template('municipal.html')
+
+@app.route('/pending_detail')
+def pending_detail():
+    if not is_municipal():
+        return redirect('/municipal/login')
+    return render_template('pending_detail.html')
+
+@app.route('/approved_detail')
+def approved_detail():
+    if not is_municipal():
+        return redirect('/municipal/login')
+    return render_template('approved_detail.html')
+
+@app.route('/declined_detail')
+def declined_detail():
+    if not is_municipal():
+        return redirect('/municipal/login')
+    return render_template('declined_detail.html')
+
+@app.route('/session_detail')
+def session_detail():
+    if not is_municipal():
+        return redirect('/municipal/login')
+    return render_template('session_detail.html')
+
+@app.route('/municipal/login')
+def municipal_login_page():
+    if is_municipal():
+        return redirect('/municipal')
+    return render_template('municipal_login.html')
 
 @app.route('/road_vision')
 def road_vision():
-    # Drivers only — municipal officers use the municipal portal
-    if not is_driver() or not flask_session.get('driver_id'):
-        return redirect('/login')
+    require_driver()
     return render_template('road_vision.html')
 
 @app.route('/mobile')
 def mobile():
-    if not is_driver() or not flask_session.get('driver_id'):
-        return redirect('/login')
+    require_driver()
     return render_template('mobile.html')
 
 
@@ -414,311 +393,8 @@ def video_feed():
         }
     )
 
-# ── Health check ──────────────────────────────────────────────────────────────
-@app.route('/api/health')
-def health():
-    return jsonify({
-        'status':      'ok',
-        'session':     sm.session.active,
-        'has_frame':   _latest_frame is not None,
-        'video_mode':  config.VIDEO_MODE,
-        'video_ip':    getattr(config, 'VIDEO_IP', ''),
-    })
 
-# ── Biometric endpoints ────────────────────────────────────────────────────────
-@app.route('/api/vehicles-and-routes')
-def api_vehicles_and_routes():
-    """Get available vehicles and routes for driver enrollment"""
-    from vehicles import get_all_vehicles
-    vehicles = get_all_vehicles()
-    routes = [
-        'City Center Route',
-        'North Highway',
-        'South Highway', 
-        'East District',
-        'West District',
-        'Airport Road'
-    ]
-    return jsonify({
-        'vehicles': [{'id': v['vehicle_id'], 'name': v['name']} for v in vehicles],
-        'routes': routes
-    })
 
-@app.route('/api/biometric-stats')
-def api_biometric_stats():
-    """Get biometric enrollment statistics"""
-    try:
-        from biometric_auth import get_biometric_engine
-        engine = get_biometric_engine()
-        return jsonify({
-            'enrolled_count': len(engine.known_face_encodings),
-            'known_drivers': [{'id': did, 'name': name} for did, name in engine.known_face_ids]
-        })
-    except Exception as e:
-        print(f"[API] Error getting biometric stats: {e}")
-        return jsonify({'enrolled_count': 0, 'known_drivers': [], 'error': str(e)}), 500
-
-# ── SocketIO events ────────────────────────────────────────────────────────────
-@socketio.on('biometric:capture_face')
-def on_capture_face(data, callback=None):
-    """Capture face from webcam frame for recognition/enrollment"""
-    def send_response(response):
-        """Send response via callback if provided, otherwise return"""
-        if callback:
-            callback(response)
-        return response
-    
-    try:
-        import base64
-        import io
-        from PIL import Image
-        import face_recognition
-        
-        print("[BIOMETRIC] Received face capture request")
-        
-        # Get frame data from client (base64 encoded JPEG)
-        frame_data = data.get('frame')
-        
-        if not frame_data:
-            print("[BIOMETRIC] No frame provided by client, attempting to use server-side frame buffer...")
-            with _frame_lock:
-                if _latest_frame is not None:
-                    # _latest_frame is a numpy array (BGR from OpenCV)
-                    # Convert BGR to RGB for face_recognition
-                    rgb_frame = cv2.cvtColor(_latest_frame, cv2.COLOR_BGR2RGB)
-                    print("[BIOMETRIC] ✓ Using server-side frame buffer")
-                else:
-                    print("[BIOMETRIC] ❌ No server-side frame available")
-                    return send_response({'success': False, 'error': 'No frame data provided and server camera not ready.'})
-        else:
-            # Decode base64 frame
-            try:
-                # Remove data URL prefix if present
-                if frame_data.startswith('data:image'):
-                    frame_data = frame_data.split(',')[1]
-                
-                # Decode base64 to bytes
-                frame_bytes = base64.b64decode(frame_data)
-                print(f"[BIOMETRIC] Frame decoded: {len(frame_bytes)} bytes")
-                
-                # Convert to PIL Image then to numpy array
-                pil_image = Image.open(io.BytesIO(frame_bytes))
-                frame_array = np.array(pil_image)
-                print(f"[BIOMETRIC] Frame shape: {frame_array.shape}")
-                
-                # PIL uses RGB, face_recognition expects RGB too
-                if len(frame_array.shape) == 3 and frame_array.shape[2] == 3:
-                    rgb_frame = frame_array
-                else:
-                    rgb_frame = cv2.cvtColor(frame_array, cv2.COLOR_BGR2RGB)
-                    
-            except Exception as decode_err:
-                print(f"[BIOMETRIC] ❌ Failed to decode frame: {decode_err}")
-                return send_response({'success': False, 'error': f'Failed to decode frame: {str(decode_err)}'})
-        
-        # Detect faces
-        print("[BIOMETRIC] Detecting faces...")
-        face_locations = face_recognition.face_locations(rgb_frame, model='hog')
-        print(f"[BIOMETRIC] Faces detected: {len(face_locations)}")
-
-        if not face_locations:
-            print("[BIOMETRIC] ❌ No face detected in frame")
-            return send_response({'success': False, 'error': 'No face detected. Ensure your face is clearly visible and well lit.'})
-
-        # ── Face quality gate: reject tiny/distant faces ──────────────────────
-        # face_locations returns (top, right, bottom, left)
-        top, right, bottom, left = face_locations[0]
-        face_h = bottom - top
-        face_w = right - left
-        frame_h, frame_w = rgb_frame.shape[:2]
-        face_area_pct = (face_h * face_w) / (frame_h * frame_w) * 100
-        print(f"[BIOMETRIC] Face size: {face_w}×{face_h}px  ({face_area_pct:.1f}% of frame)")
-        if face_area_pct < 3.0:
-            return send_response({'success': False,
-                'error': 'Face too small or far from camera. Move closer and centre your face.'})
-
-        # ── Generate encoding with num_jitters=5 for stability ────────────────
-        # num_jitters > 1 averages multiple jittered versions of the face crop,
-        # producing a much more consistent 128-d vector across frames.
-        print("[BIOMETRIC] Generating face encoding (jitters=5)...")
-        face_encodings = face_recognition.face_encodings(
-            rgb_frame, face_locations, num_jitters=5)
-        if not face_encodings:
-            print("[BIOMETRIC] ❌ Face encoding failed")
-            return send_response({'success': False, 'error': 'Face found but encoding failed. Try better lighting.'})
-
-        encoding = face_encodings[0].astype(float).tolist()
-        print(f"[BIOMETRIC] ✓ Face encoding generated successfully")
-        return send_response({'success': True, 'encoding': encoding})
-        
-    except Exception as e:
-        print(f"[BIOMETRIC] ❌ Exception in face capture: {e}")
-        import traceback
-        traceback.print_exc()
-        return send_response({'success': False, 'error': f'Server error: {str(e)}'})
-
-@socketio.on('biometric:recognize')
-def on_recognize(data, callback=None):
-    """Recognize driver from face encoding(s) — supports multi-frame median voting."""
-    def send_response(response):
-        if callback:
-            callback(response)
-        return response
-
-    try:
-        from biometric_auth import get_biometric_engine
-
-        # Accept either a single encoding or a list of encodings (multi-frame)
-        raw_encodings = data.get('encodings') or (
-            [data.get('encoding')] if data.get('encoding') else []
-        )
-
-        if not raw_encodings:
-            return send_response({'success': False, 'error': 'No encoding provided'})
-
-        # Validate each and collect valid 128-d vectors
-        valid_encodings = []
-        for raw in raw_encodings:
-            enc = np.array(raw, dtype=np.float64)
-            if enc.size == 128:
-                valid_encodings.append(enc)
-
-        if not valid_encodings:
-            return send_response({'success': False, 'error': 'Invalid face encoding'})
-
-        engine = get_biometric_engine()
-
-        if len(valid_encodings) == 1:
-            # Single frame — standard path
-            driver = engine.recognize_driver(valid_encodings[0])
-        else:
-            # Multi-frame median voting ─────────────────────────────────────
-            # For each known face, compute distance to every submitted encoding.
-            # Take the MEDIAN distance per candidate (robust to outlier frames).
-            # Then run recognition on the synthetic "median" result.
-            if len(engine.known_face_encodings) == 0:
-                return send_response({'success': False, 'driver': None})
-
-            # Shape: (num_known, num_frames)
-            dist_matrix = np.array([
-                face_recognition.face_distance(engine.known_face_encodings, enc)
-                for enc in valid_encodings
-            ]).T   # → (num_known, num_frames)
-
-            median_dists = np.median(dist_matrix, axis=1)
-            best_idx     = int(np.argmin(median_dists))
-            best_dist    = float(median_dists[best_idx])
-            confidence   = 1.0 - best_dist
-
-            print(f"[BIOMETRIC] Multi-frame ({len(valid_encodings)} frames) "
-                  f"median distance: {best_dist:.4f}  confidence: {confidence:.1%}")
-
-            # Apply same gates as recognize_driver
-            tolerance = 0.45
-            if best_dist >= tolerance:
-                print(f"[BIOMETRIC] ❌ Rejected — median distance {best_dist:.4f} ≥ {tolerance}")
-                driver = None
-            elif len(engine.known_face_encodings) == 1 and best_dist > 0.45:
-                print(f"[BIOMETRIC] ❌ Rejected (single-driver gate) — {best_dist:.4f} > 0.45")
-                driver = None
-            elif len(engine.known_face_encodings) > 1:
-                sorted_dists = np.sort(median_dists)
-                gap = float(sorted_dists[1] - sorted_dists[0])
-                if gap < 0.06:
-                    print(f"[BIOMETRIC] ❌ Rejected — ambiguous (gap {gap:.4f} < 0.06)")
-                    driver = None
-                else:
-                    driver_id, name = engine.known_face_ids[best_idx]
-                    driver = {'driver_id': driver_id, 'name': name, 'confidence': confidence}
-            else:
-                driver_id, name = engine.known_face_ids[best_idx]
-                driver = {'driver_id': driver_id, 'name': name, 'confidence': confidence}
-
-        if not driver:
-            return send_response({'success': False, 'driver': None,
-                'message': 'Face not recognised. Please try again in better lighting.'})
-
-        assignments = engine.get_driver_vehicles(driver['driver_id'])
-        vehicle_id  = (assignments.get('vehicles') or [None])[0]
-
-        flask_session['role']        = 'driver'
-        flask_session['driver_id']   = driver['driver_id']
-        flask_session['driver_name'] = driver['name']
-        if vehicle_id:
-            flask_session['vehicle_id'] = vehicle_id
-        flask_session.modified = True
-
-        return send_response({
-            'success': True,
-            'driver': {
-                **driver,
-                'vehicles': assignments.get('vehicles', []),
-                'routes': assignments.get('routes', []),
-            }
-        })
-    except Exception as e:
-        import traceback
-        print(f"[BIOMETRIC] EXCEPTION in recognize: {e}")
-        traceback.print_exc()
-        return send_response({'success': False, 'error': str(e)})
-
-@socketio.on('biometric:enroll_driver')
-def on_enroll_driver(data, callback=None):
-    """Enroll new driver with biometric data"""
-    def send_response(response):
-        if callback:
-            callback(response)
-        return response
-    try:
-        from biometric_auth import get_biometric_engine
-        
-        print(f"[BIOMETRIC] on_enroll_driver called with data keys: {data.keys() if isinstance(data, dict) else type(data)}")
-        
-        name = (data.get('name') or 'Unknown Driver').strip()
-        vehicles = data.get('vehicles', [])
-        routes = data.get('routes', [])
-        raw_encoding = data.get('face_encoding')
-        
-        print(f"[BIOMETRIC] Enrollment data: name={name}, vehicles={vehicles}, routes={routes}")
-        print(f"[BIOMETRIC] Raw encoding type: {type(raw_encoding)}, value preview: {str(raw_encoding)[:100] if raw_encoding else 'None'}")
-        
-        face_encoding = np.array(raw_encoding or [], dtype=np.float64)
-        print(f"[BIOMETRIC] Encoded array: shape={face_encoding.shape}, size={face_encoding.size}")
-
-        if not name:
-            return send_response({'success': False, 'error': 'Driver name is required'})
-        if not vehicles or not routes:
-            return send_response({'success': False, 'error': 'Select at least one vehicle and one route'})
-        if face_encoding.size != 128:
-            return send_response({'success': False, 'error': 'Invalid face encoding'})
-
-        engine = get_biometric_engine()
-        driver_id = engine.enroll_new_driver(name, vehicles, routes, face_encoding)
-        if driver_id is None:
-            return send_response({'success': False, 'error': 'Enrollment failed. Driver may already exist.'})
-
-        flask_session['role'] = 'driver'
-        flask_session['driver_id'] = driver_id
-        flask_session['driver_name'] = name
-        flask_session['vehicle_id'] = vehicles[0]
-        
-        # Explicitly mark session as modified to ensure it's saved
-        flask_session.modified = True
-        
-        return send_response({
-            'success': True,
-            'driver_id': driver_id,
-            'name': name,
-            'message': f'Driver {name} enrolled successfully'
-        })
-        
-    except Exception as e:
-        import traceback
-        print(f"[BIOMETRIC] EXCEPTION in enroll_driver: {e}")
-        traceback.print_exc()
-        return send_response({'success': False, 'error': str(e)})
-
-# ── WebSocket: Real-time Frame Streaming ──────────────────────────────────────
 @socketio.on('stream:join')
 def on_stream_join(data):
     """Client requests to join the frame stream"""

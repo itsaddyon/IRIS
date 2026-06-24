@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Declined Detections — IRIS Municipal Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; font-family: 'JetBrains Mono', monospace; }
+    
+    :root {
+      --bg: #0a0e27;
+      --card: #111930;
+      --border: #1f2947;
+      --text: #e0e0ff;
+      --sub: #8892b4;
+      --accent: #3b82f6;
+      --red: #ff3b5c;
+      --orange: #f59e0b;
+      --green: #10b981;
+      --yellow: #fbbf24;
+    }
+    
+    body { background: var(--bg); color: var(--text); }
+    
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 100vh;
+      gap: 0;
+      overflow: hidden;
+    }
+    
+    .header {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 60px;
+      background: rgba(17, 25, 48, 0.95);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+    }
+    
+    .header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: flex; align-items: center; gap: 10px;
+    }
+    
+    .header-actions {
+      display: flex; gap: 10px;
+    }
+    
+    .btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover { background: #2563eb; transform: translateY(-1px); }
+    
+    .btn-ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    
+    .btn-ghost:hover { background: rgba(59, 130, 246, 0.1); }
+    
+    .left-panel {
+      grid-column: 1;
+      overflow-y: auto;
+      padding: 70px 20px 20px;
+      border-right: 1px solid var(--border);
+    }
+    
+    .right-panel {
+      grid-column: 2;
+      overflow: hidden;
+      padding: 60px 0 0;
+      display: flex; flex-direction: column;
+    }
+    
+    #map {
+      flex: 1;
+      width: 100%;
+    }
+    
+    .detection-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    
+    .detection-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .detection-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.1);
+      transform: translateX(4px);
+    }
+    
+    .detection-card.selected {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.05);
+    }
+    
+    .detection-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    }
+    
+    .detection-time {
+      font-size: 0.75rem;
+      color: var(--sub);
+    }
+    
+    .severity-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    
+    .severity-high { background: rgba(255, 59, 92, 0.2); color: var(--red); }
+    .severity-medium { background: rgba(245, 158, 11, 0.2); color: var(--orange); }
+    .severity-low { background: rgba(16, 185, 129, 0.2); color: var(--green); }
+    
+    .status-badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(255, 59, 92, 0.2);
+      color: var(--red);
+    }
+    
+    .detection-details {
+      font-size: 0.85rem;
+      color: var(--sub);
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px;
+      color: var(--sub);
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--sub);
+    }
+    
+    @media (max-width: 1024px) {
+      .container { grid-template-columns: 1fr; }
+      .left-panel { grid-column: 1; border-right: none; border-bottom: 1px solid var(--border); }
+      .right-panel { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><i class="fas fa-chevron-left" style="cursor: pointer; font-size: 1rem;" onclick="window.history.back();"></i> Declined Detections</h1>
+    <div class="header-actions">
+      <button class="btn btn-ghost" onclick="location.href='/municipal'">Back to Dashboard</button>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div class="left-panel">
+      <div class="detection-grid" id="detection-grid">
+        <div class="loading">Loading declined detections...</div>
+      </div>
+    </div>
+    
+    <div class="right-panel">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+  
+  <script>
+    const socket = io();
+    let map;
+    let currentDetections = [];
+    let selectedDetection = null;
+    const markers = {};
+
+    // Initialize Leaflet map
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([29.905568, 77.838089], 14);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      
+      const satellite = L.layerGroup([
+        L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+          attribution: '© Google',
+          maxZoom: 20,
+        }),
+      ]);
+      
+      const vector = L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', {
+        attribution: '© CartoDB',
+        maxZoom: 19,
+      });
+      
+      satellite.addTo(map);
+    }
+
+    // Load declined detections from API
+    async function loadDeclinedDetections() {
+      try {
+        const response = await fetch('/api/declined_detections');
+        currentDetections = await response.json();
+        renderDetections();
+      } catch (error) {
+        console.error('Error loading detections:', error);
+        document.getElementById('detection-grid').innerHTML = '<div class="empty">Error loading detections.</div>';
+      }
+    }
+
+    // Render detection cards
+    function renderDetections() {
+      const grid = document.getElementById('detection-grid');
+      
+      if (!currentDetections.length) {
+        grid.innerHTML = '<div class="empty">No declined detections.</div>';
+        return;
+      }
+      
+      grid.innerHTML = currentDetections.map((detection, idx) => `
+        <div class="detection-card" onclick="selectDetection(${idx})" data-detection-id="${detection.id}">
+          <div class="detection-header">
+            <div class="detection-time">${formatTime(detection.timestamp)}</div>
+            <div style="display: flex; gap: 6px;">
+              <span class="severity-badge severity-${detection.severity?.toLowerCase() || 'medium'}">
+                ${detection.severity || 'MEDIUM'}
+              </span>
+              <span class="status-badge">✗ Declined</span>
+            </div>
+          </div>
+          <div class="detection-details">
+            <div><strong>Location:</strong> ${detection.location || 'Unknown'}</div>
+            <div><strong>Confidence:</strong> ${(detection.confidence * 100).toFixed(1)}%</div>
+            <div><strong>Vehicle:</strong> ${detection.vehicle_id || 'N/A'}</div>
+          </div>
+        </div>
+      `).join('');
+      
+      // Add markers to map
+      Object.keys(markers).forEach(id => map.removeLayer(markers[id]));
+      Object.keys(markers).forEach(id => delete markers[id]);
+      
+      currentDetections.forEach((detection, idx) => {
+        if (detection.location) {
+          const [lat, lng] = detection.location.split(',').map(parseFloat);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            const color = detection.severity === 'High' ? '#ff3b5c' : 
+                          detection.severity === 'Medium' ? '#f59e0b' : '#10b981';
+            const marker = L.circleMarker([lat, lng], {
+              radius: 8,
+              fillColor: color,
+              color: color,
+              weight: 2,
+              opacity: 0.8,
+              fillOpacity: 0.6,
+            }).bindPopup(`<strong>${detection.severity} Severity</strong><br/>Confidence: ${(detection.confidence * 100).toFixed(1)}%`)
+              .addTo(map)
+              .on('click', () => selectDetection(currentDetections.indexOf(detection)));
+            
+            markers[detection.id] = marker;
+          }
+        }
+      });
+      
+      if (currentDetections.length > 0) {
+        selectDetection(0);
+      }
+    }
+
+    function selectDetection(idx) {
+      selectedDetection = idx;
+      
+      // Update card selection
+      document.querySelectorAll('.detection-card').forEach((card, i) => {
+        card.classList.toggle('selected', i === idx);
+      });
+      
+      // Focus map on detection
+      const detection = currentDetections[idx];
+      if (detection.location) {
+        const [lat, lng] = detection.location.split(',').map(parseFloat);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          map.flyTo([lat, lng], 16);
+          if (markers[detection.id]) {
+            markers[detection.id].openPopup();
+          }
+        }
+      }
+    }
+
+    function formatTime(isoString) {
+      if (!isoString) return 'N/A';
+      try {
+        const date = new Date(isoString);
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      } catch {
+        return isoString;
+      }
+    }
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadDeclinedDetections();
+    });
+
+    // Listen for real-time updates
+    socket.on('detection_declined', loadDeclinedDetections);
+  </script>
+</body>
+</html>

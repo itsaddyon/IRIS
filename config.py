@@ -15,7 +15,7 @@ VIDEO_PATH = 'demo.mp4'
 #    - Quality: 50% (balance speed vs quality)
 #    - FPS limit: 15 (enough for detection, reduces WiFi load)
 # 4. Tap 'Start server' → note IP shown → update below
-VIDEO_IP = 'http://172.168.29.3:8080/video'
+VIDEO_IP = 'http://172.168.17.126:8080/video'
 
 # ─── Model ───────────────────────────────────────────────
 MODEL_PATH = os.path.join('models', 'best.pt')
@@ -45,5 +45,5 @@ ARDUINO_PORT    = 'COM12'   # ← Arduino Uno on COM12
 # ─── Google Gemini AI ───────────────────────────────────────
 # Set via environment variable: GEMINI_API_KEY
 # Get free key at: https://aistudio.google.com/apikey
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GEMINI_API_KEY = 'AIzaSyAfxKR2_oaUOrMXFqAIU4gx5UNMvfN_mPI'
 GEMINI_ENABLED = True       # Enable AI-powered incident analysis

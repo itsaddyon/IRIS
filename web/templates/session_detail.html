@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Session Detections — IRIS Municipal Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root {
+      --bg: #030712;
+      --card: rgba(17, 24, 39, 0.78);
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #3b82f6;
+      --red: #f43f5e;
+      --orange: #f59e0b;
+      --green: #10b981;
+      --text: #f9fafb;
+      --sub: #9ca3af;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: 60px;
+      background: rgba(10, 15, 30, 0.9);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      backdrop-filter: blur(16px);
+    }
+
+    .header h1 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 700;
+      padding: 8px 14px;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: minmax(420px, 0.92fr) 1.08fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .left-panel {
+      padding: 76px 20px 20px;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+    }
+
+    .right-panel {
+      padding-top: 60px;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #07111f;
+    }
+
+    .session-meta {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+      color: var(--sub);
+      line-height: 1.5;
+      font-size: 0.86rem;
+    }
+
+    .detection-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .detection-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s, background 0.2s;
+    }
+
+    .detection-card:hover,
+    .detection-card.selected {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.06);
+    }
+
+    .detection-card:hover { transform: translateX(4px); }
+
+    .detection-image,
+    .detection-image-placeholder {
+      width: 100%;
+      height: 190px;
+      object-fit: cover;
+      display: block;
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .detection-image { cursor: zoom-in; }
+
+    .detection-image-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--sub);
+      font-size: 0.82rem;
+    }
+
+    .detection-body { padding: 14px; }
+
+    .detection-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .detection-time {
+      color: var(--sub);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .severity-badge {
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .severity-high { background: rgba(244, 63, 94, 0.18); color: var(--red); }
+    .severity-medium { background: rgba(245, 158, 11, 0.18); color: var(--orange); }
+    .severity-low { background: rgba(16, 185, 129, 0.18); color: var(--green); }
+
+    .detection-details {
+      color: var(--sub);
+      font-size: 0.86rem;
+      line-height: 1.55;
+    }
+
+    .ai-insight {
+      margin-top: 10px;
+      border: 1px solid rgba(59, 130, 246, 0.18);
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.06);
+      padding: 10px;
+      color: #c7d2fe;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.82);
+      padding: 28px;
+    }
+
+    .modal.active { display: flex; }
+
+    .modal img {
+      max-width: 92vw;
+      max-height: 88vh;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      object-fit: contain;
+    }
+
+    .empty {
+      color: var(--sub);
+      text-align: center;
+      padding: 44px 18px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+    }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; height: auto; }
+      .container { grid-template-columns: 1fr; height: auto; }
+      .left-panel { border-right: none; }
+      .right-panel { height: 420px; padding-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="modal" id="modal" onclick="this.classList.remove('active')">
+    <img id="modal-img" src="" alt="">
+  </div>
+
+  <div class="header">
+    <h1><i class="fas fa-chevron-left" style="cursor:pointer;" onclick="window.history.back();"></i> Session Detections</h1>
+    <button class="btn" onclick="location.href='/municipal'">Back to Dashboard</button>
+  </div>
+
+  <div class="container">
+    <div class="left-panel">
+      <div class="session-meta" id="session-meta">Loading session...</div>
+      <div class="detection-grid" id="detection-grid">
+        <div class="empty">Loading detections...</div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    const markers = {};
+    let map;
+    let detections = [];
+
+    function snapshotUrl(item) {
+      if (!item.photo_path) return null;
+      return '/snapshot/' + item.photo_path.replace(/\\/g, '/').split('/').pop();
+    }
+
+    function openModal(src) {
+      document.getElementById('modal-img').src = src;
+      document.getElementById('modal').classList.add('active');
+    }
+
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([29.905568, 77.838089], 14);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 20,
+      }).addTo(map);
+    }
+
+    function formatSeverity(severity) {
+      return (severity || 'Low').toLowerCase();
+    }
+
+    function renderDetections() {
+      const grid = document.getElementById('detection-grid');
+      if (!detections.length) {
+        grid.innerHTML = '<div class="empty">No detections found for this session.</div>';
+        return;
+      }
+
+      grid.innerHTML = detections.map((item, idx) => {
+        const url = snapshotUrl(item);
+        const severity = formatSeverity(item.severity);
+        const ai = item.ai_analysis ? `<div class="ai-insight">${item.ai_analysis}</div>` : '';
+        return `<div class="detection-card" id="det-${idx}" onclick="selectDetection(${idx})">
+          ${url ? `<img class="detection-image" src="${url}" onclick="event.stopPropagation(); openModal('${url}')">` : '<div class="detection-image-placeholder">No pothole image captured</div>'}
+          <div class="detection-body">
+            <div class="detection-header">
+              <div class="detection-time">${item.timestamp || 'Unknown time'}</div>
+              <span class="severity-badge severity-${severity}">${item.severity || 'Low'}</span>
+            </div>
+            <div class="detection-details">
+              <div><strong>Location:</strong> ${item.location || 'GPS unavailable'}</div>
+              <div><strong>Confidence:</strong> ${((item.confidence || 0) * 100).toFixed(1)}%</div>
+              <div><strong>Status:</strong> ${item.approved ? 'Approved' : item.declined ? 'Declined' : 'Pending'}</div>
+            </div>
+            ${ai}
+          </div>
+        </div>`;
+      }).join('');
+
+      Object.values(markers).forEach(marker => map.removeLayer(marker));
+      Object.keys(markers).forEach(id => delete markers[id]);
+
+      detections.forEach((item, idx) => {
+        if (!item.location) return;
+        const [lat, lng] = item.location.split(',').map(parseFloat);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+        const color = item.severity === 'High' ? '#f43f5e' : item.severity === 'Medium' ? '#f59e0b' : '#10b981';
+        markers[idx] = L.circleMarker([lat, lng], {
+          radius: 8,
+          color,
+          fillColor: color,
+          fillOpacity: 0.65,
+          weight: 2,
+        }).bindPopup(`<strong>${item.severity || 'Detection'}</strong><br>${((item.confidence || 0) * 100).toFixed(1)}% confidence`).addTo(map);
+      });
+
+      selectDetection(0);
+    }
+
+    function selectDetection(idx) {
+      document.querySelectorAll('.detection-card').forEach((card, i) => {
+        card.classList.toggle('selected', i === idx);
+      });
+
+      const item = detections[idx];
+      if (!item || !item.location) return;
+      const [lat, lng] = item.location.split(',').map(parseFloat);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+      map.flyTo([lat, lng], 16);
+      if (markers[idx]) markers[idx].openPopup();
+    }
+
+    async function loadSession() {
+      if (!sessionId) {
+        document.getElementById('session-meta').textContent = 'No session selected.';
+        document.getElementById('detection-grid').innerHTML = '<div class="empty">Open this page from a session report.</div>';
+        return;
+      }
+
+      const sessions = await fetch('/api/sessions').then(r => r.json());
+      const session = sessions.find(item => item.session_id === sessionId);
+      document.getElementById('session-meta').innerHTML = session
+        ? `<strong>${session.vehicle_id}</strong><br>${session.route || 'Unknown route'}<br>${session.start_time || 'Unknown start'} to ${session.end_time || 'In progress'}`
+        : `<strong>${sessionId}</strong><br>Session metadata unavailable.`;
+
+      detections = await fetch('/api/session/' + encodeURIComponent(sessionId) + '/detections').then(r => r.json());
+      renderDetections();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadSession();
+    });
+  </script>
+</body>
+</html>

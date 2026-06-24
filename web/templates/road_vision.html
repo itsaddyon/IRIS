@@ -426,12 +426,14 @@ makeLine(-1.2, -ROAD_LEN/2+15, ROAD_LEN, 0xffdd00);
 makeLine( 1.2, -ROAD_LEN/2+15, ROAD_LEN, 0xffdd00);
 
 // Center dashes
+const roadDashes = [];
 for (let z = -50; z < 20; z += 4) {
   const geo = new THREE.BoxGeometry(0.1, 0.04, 2.2);
   const mat = new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffffff, emissiveIntensity:0.3 });
   const m = new THREE.Mesh(geo, mat);
   m.position.set(0, 0.02, z);
   scene.add(m);
+  roadDashes.push(m);
 }
 
 // Sidewalks
@@ -823,13 +825,24 @@ function animate() {
       potholeGroup.remove(p.ring);
       potholeGroup.remove(p.pl);
       p.cracks.forEach(crack => potholeGroup.remove(crack));
+      
+      // Dispose WebGL resources to prevent severe memory leaks
+      p.crater.geometry.dispose();
+      p.crater.material.dispose();
+      p.ring.geometry.dispose();
+      p.ring.material.dispose();
+      p.cracks.forEach(crack => {
+        crack.geometry.dispose();
+        crack.material.dispose();
+      });
+      
       potholes.splice(i, 1);
     }
   }
 
   // Animate road dash scroll (simulate movement)
   if (camMode===1) {
-    scene.children.filter(c=>c.isMesh&&c.geometry?.type==='BoxGeometry'&&c.position.y===0.02&&Math.abs(c.scale.x)===1).forEach(dash=>{
+    roadDashes.forEach(dash => {
       dash.position.z += 0.04;
       if(dash.position.z > 20) dash.position.z -= 70;
     });
@@ -839,7 +852,13 @@ function animate() {
   for (let i=particlePool.length-1; i>=0; i--) {
     const p = particlePool[i];
     p.life -= 0.02;
-    if(p.life<=0) { scene.remove(p.pts); particlePool.splice(i,1); continue; }
+    if(p.life<=0) { 
+      scene.remove(p.pts); 
+      p.pts.geometry.dispose();
+      p.pts.material.dispose();
+      particlePool.splice(i,1); 
+      continue; 
+    }
     const pos = p.pts.geometry.attributes.position.array;
     for(let j=0; j<p.velocities.length; j++) {
       pos[j*3]   += p.velocities[j][0];
