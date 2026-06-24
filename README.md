@@ -213,17 +213,28 @@ IRIS/
 └── RELEASE_NOTES.md         # Versioned release notes
 ```
 
-## Professional Screenshots
+## System Screenshots
 
-Screenshots should be added before portfolio submission or publication reference.
+### Hardware Prototype & Edge Integration
+![Hardware Integration](docs/images/hardware.png)
+*The physical hardware setup featuring a mounted IP Webcam Pro on a mobile device capturing the live feed, alongside an Arduino-based physical alert system (LEDs and buzzer) that triggers in real-time for high-severity detections.*
 
-| Screenshot | Placeholder | Description |
-| --- | --- | --- |
-| Field dashboard | `docs/assets/screenshots/field-dashboard.png` | Live inspection interface with camera feed and detection statistics. |
-| Municipal dashboard | `docs/assets/screenshots/municipal-dashboard.png` | Review queue with approval and decline workflow. |
-| Detection detail | `docs/assets/screenshots/detection-detail.png` | High-severity detection evidence, location, and metadata. |
-| Map view | `docs/assets/screenshots/map-view.png` | Approved detections displayed on a GIS map. |
-| Report output | `docs/assets/screenshots/report-output.png` | Generated municipal inspection report. |
+
+### Operations Portal & GIS Mapping
+![Operations Portal](docs/images/portal.png)
+*The central command center for municipal reviewers. It features a 3D pothole map, real-time pending review queues with Gemini AI insights, severity distributions, and historical detection trends.*
+
+### Live Session Detections
+![Session Detections](docs/images/session.png)
+*Detailed view of an individual high-severity detection, highlighting the YOLOv8 bounding box, timestamp, confidence score, and precise GPS mapping for repair teams.*
+
+### High-Resolution Evidence Modal
+![Detection Detail](docs/images/detection-detail.png)
+*An overlay modal providing the exact high-resolution frame where the anomaly was detected, allowing reviewers to verify the AI's confidence score and bounding box accuracy.*
+
+### Road Vision 3D
+![Road Vision 3D](docs/images/roadvision.png)
+*An interactive 3D visualization of the road surface scanning process, identifying minor and major surface anomalies in a simulated environment.*
 
 ## Roadmap
 

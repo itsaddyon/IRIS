@@ -1,21 +1,14 @@
 cff-version: 1.2.0
-message: "If you use this software in your research or project, please cite it as below."
-authors:
-  - family-names: "Arya"
-    given-names: "Adarsh"
+message: "If you use this software, please cite it as follows."
+
 title: "IRIS - Intelligent Road Inspection System"
-version: 1.0.0
+
+authors:
+  - family-names: Arya
+    given-names: Adarsh
+
+version: "1.0.1"
+
 date-released: 2026-06-25
+
 url: "https://github.com/itsaddyon/IRIS"
-repository-code: "https://github.com/itsaddyon/IRIS"
-abstract: >-
-  IRIS (Intelligent Road Inspection System) is an automated
-  pothole detection, severity classification, and municipal
-  review workflow system using YOLO-based computer vision.
-keywords:
-  - computer-vision
-  - yolov8
-  - pothole-detection
-  - smart-city
-  - road-inspection
-license: "Proprietary"
