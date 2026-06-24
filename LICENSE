@@ -1,0 +1,36 @@
+# IRIS Proprietary Source-Available License
+
+Copyright (c) 2026 Adarsh Arya. All Rights Reserved.
+
+This license applies to IRIS (Intelligent Road Inspection System), including its source code, architecture, workflows, interfaces, documentation, configuration files, and associated materials, unless a file explicitly states otherwise.
+
+## 1. Source Viewing Permission
+
+Permission is granted to view the source code and documentation in this repository for personal learning, academic review, portfolio evaluation, recruitment review, and non-commercial reference purposes.
+
+## 2. Restrictions
+
+Without prior written permission from Adarsh Arya, you may not:
+
+- modify, adapt, or create derivative works from the source code;
+- redistribute, sublicense, publish, mirror, or re-upload the source code or substantial portions of it;
+- sell, resell, rent, lease, or commercially exploit the project;
+- use the project, source code, architecture, workflows, interfaces, or documentation in a commercial product or paid service;
+- remove or alter copyright notices, authorship notices, ownership notices, or license notices;
+- claim ownership, authorship, or original creation of this project or any substantial portion of it.
+
+## 3. Written Permission
+
+Any modification, redistribution, resale, commercial usage, publication reuse, or derivative implementation requires prior written permission from Adarsh Arya.
+
+## 4. Ownership
+
+All copyright and intellectual property rights in IRIS remain with Adarsh Arya. No ownership rights are transferred by making this repository viewable.
+
+## 5. Third-Party Components
+
+Third-party libraries, frameworks, datasets, tools, and services referenced by this project remain subject to their respective licenses and terms. This license applies only to original IRIS project materials owned by Adarsh Arya.
+
+## 6. No Warranty
+
+The project is provided for viewing and reference only, without warranty of any kind, express or implied. The author is not liable for any claim, damage, loss, or other liability arising from access to or use of the project.
