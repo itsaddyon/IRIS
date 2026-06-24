@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as follows."
+message: "If you use this software, please cite it as below."
 
 title: "IRIS - Intelligent Road Inspection System"
 
@@ -7,7 +7,7 @@ authors:
   - family-names: Arya
     given-names: Adarsh
 
-version: "1.0.1"
+version: "v1.0.1"
 
 date-released: 2026-06-25
 
