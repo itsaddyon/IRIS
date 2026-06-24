@@ -33,7 +33,7 @@ def generate_report(detections, output_path):
 
     # ── Header ─────────────────────────────────────────────
     elements.append(Paragraph("IRIS – Road Inspection Report", title_s))
-    elements.append(Paragraph("Intelligent Road Inspection System | Team Grey Hats | Technomax 2026", sub_s))
+    elements.append(Paragraph("Intelligent Road Inspection System", sub_s))
     elements.append(Paragraph(
         f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}  |  "
         f"Total Approved Potholes: {len(detections)}", sub_s))

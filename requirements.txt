@@ -1,5 +1,4 @@
 # IRIS — Intelligent Road Inspection System
-# Team Grey Hats | Technomax 2026
 # Install: pip install -r requirements.txt
 
 # Core AI & Vision

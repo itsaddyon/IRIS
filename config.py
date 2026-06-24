@@ -45,5 +45,5 @@ ARDUINO_PORT    = 'COM12'   # ← Arduino Uno on COM12
 # ─── Google Gemini AI ───────────────────────────────────────
 # Set via environment variable: GEMINI_API_KEY
 # Get free key at: https://aistudio.google.com/apikey
-GEMINI_API_KEY = 'AIzaSyAfxKR2_oaUOrMXFqAIU4gx5UNMvfN_mPI'
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_ENABLED = True       # Enable AI-powered incident analysis

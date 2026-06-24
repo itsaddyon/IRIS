@@ -3,23 +3,32 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Database (contains personal data)
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+firestore-key.json
+*.pem
+*.key
+
+# Database and biometric data (contains personal/private data)
 iris.db
 driver_biometrics.pkl
 database/driver_biometrics.pkl
-firestore-key.json
+*.sqlite
+*.sqlite3
 
-# Snapshots (too large for GitHub)
+# Generated media and reports
 snapshots/
+_recording_frames/
+IRIS_Report.pdf
 
 # Generated files
-IRIS_Report.pdf
 biometric_config.py
 *.tmp
+.firebase/
 
 # Model weights (too large — 6MB+, use Git LFS or share separately)
 models/best.pt
-
-# Environment
-.env
-venv/

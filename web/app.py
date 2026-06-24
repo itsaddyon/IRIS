@@ -21,7 +21,7 @@ from database.db_manager import (
 )
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'iris_secret_2026'
+app.config['SECRET_KEY'] = os.environ.get('IRIS_SECRET_KEY', 'dev-only-change-me')
 # Increase max message size for large frame data (base64 encoded images)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading', 
                     max_http_buffer_size=50e6)  # 50MB
