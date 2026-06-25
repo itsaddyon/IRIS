@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+
+message: "If you use this software in research, please cite it using the metadata below."
+
+title: "IRIS: Intelligent Road Inspection System"
+
+type: software
+
+authors:
+  - family-names: Arya
+    given-names: Adarsh
+    orcid: "https://orcid.org/0009-0003-3703-460X"
+
+abstract: >
+  IRIS (Intelligent Road Inspection System) is an AI-powered
+  road infrastructure monitoring platform that performs
+  real-time pothole detection, severity classification,
+  GPS-based localization, municipal review workflows,
+  and intelligent road inspection using deep learning
+  and computer vision.
+
+version: "v1.0.0"
+
+date-released: 2026-06-26
+
+repository-code: "https://github.com/itsaddyon/IRIS"
+
+url: "https://github.com/itsaddyon/IRIS"
+
+license: "NOASSERTION"
+
+keywords:
+  - road inspection
+  - pothole detection
+  - computer vision
+  - deep learning
+  - YOLO
+  - intelligent transportation
+  - GIS
+  - smart city
