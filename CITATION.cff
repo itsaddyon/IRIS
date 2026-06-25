@@ -1,12 +1,13 @@
-cff-version: 1.2.0
-message: "If you use this software, please cite it."
-
-title: "IRIS"
+cff-version: 1.1.0
+message: "If you use this software, please cite it as below."
 
 authors:
   - family-names: Arya
     given-names: Adarsh
-    orcid: "https://orcid.org/0009-0003-3703-460X"
+    orcid: https://orcid.org/0009-0003-3703-460X
 
-version: "v1.0.3"
+title: "IRIS - Intelligent Road Inspection System"
+
+version: v1.0.3
+
 date-released: 2026-06-25
