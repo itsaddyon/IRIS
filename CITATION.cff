@@ -7,8 +7,20 @@ authors:
   - family-names: Arya
     given-names: Adarsh
 
-version: "v1.0.2"
+version: "v1.0.3"
 
 date-released: 2026-06-25
 
+repository-code: "https://github.com/itsaddyon/IRIS"
 url: "https://github.com/itsaddyon/IRIS"
+
+license: "Proprietary"
+
+keywords:
+  - computer vision
+  - pothole detection
+  - intelligent transportation
+  - smart cities
+  - road inspection
+  - yolo
+  - deep learning
