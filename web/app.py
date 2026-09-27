@@ -182,7 +182,9 @@ def session_detail():
 def municipal_login_page():
     if is_municipal():
         return redirect('/municipal')
-    return render_template('municipal_login.html')
+    from auth import MUNICIPAL_USERS
+    officer_password = MUNICIPAL_USERS.get('officer', 'iris2026')
+    return render_template('municipal_login.html', default_password=officer_password)
 
 @app.route('/road_vision')
 def road_vision():

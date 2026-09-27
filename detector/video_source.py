@@ -117,9 +117,9 @@ def get_source():
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return FrameGrabber(cap, "usb")
 
-    # ── IP Webcam (Android IP Webcam app) ──────────────────────────────────
+    # ── IP Webcam (Android IP Webcam app) ─────────────────────────────────
     elif mode == 'ip_camera':
-        base_url = getattr(config, 'VIDEO_IP', 'http://172.168.19.76:8080/video')
+        base_url = getattr(config, 'VIDEO_IP', 'http://172.168.27.36:8080/video')
         # Strip trailing /video so we can try both endpoints (Python 3.8 compatible)
         base = base_url.rstrip('/')
         if base.endswith('/video'):

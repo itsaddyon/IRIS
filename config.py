@@ -4,7 +4,7 @@ import os
 # 'webcam'    → USB webcam
 # 'video'     → pre-recorded video file
 # 'ip_camera' → phone camera over WiFi
-VIDEO_MODE = 'ip_camera'
+VIDEO_MODE = 'webcam'
 VIDEO_PATH = 'demo.mp4'
 
 # IP Camera — Steps:
@@ -15,7 +15,7 @@ VIDEO_PATH = 'demo.mp4'
 #    - Quality: 50% (balance speed vs quality)
 #    - FPS limit: 15 (enough for detection, reduces WiFi load)
 # 4. Tap 'Start server' → note IP shown → update below
-VIDEO_IP = 'http://172.168.17.126:8080/video'
+VIDEO_IP = 'http://10.170.141.104:8080/video'
 
 # ─── Model ───────────────────────────────────────────────
 MODEL_PATH = os.path.join('models', 'best.pt')

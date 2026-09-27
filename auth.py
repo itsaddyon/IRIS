@@ -7,8 +7,8 @@ import os
 
 # Municipal officer credentials
 MUNICIPAL_USERS = {
-    'officer': os.environ.get('IRIS_OFFICER_PASSWORD', ''),
-    'admin': os.environ.get('IRIS_ADMIN_PASSWORD', ''),
+    'officer': os.environ.get('IRIS_OFFICER_PASSWORD') or 'iris2026',
+    'admin': os.environ.get('IRIS_ADMIN_PASSWORD') or 'admin2026',
 }
 
 # Vehicle driver PINs — vehicle_id: PIN (UNIQUE per vehicle for security)
